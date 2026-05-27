@@ -3,23 +3,32 @@ require('dotenv').config();
 const express    = require('express');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
 const db         = require('../db');
 const { requireAuth, requireRole } = require('../auth');
 
 const router     = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'waslney_secret_change_me';
 
-// ── Email transporter (Hostinger SMTP — support@waslney.com) ─────────────────
-const transporter = nodemailer.createTransport({
-  host: 'smtp.hostinger.com',
-  port: 465,
-  secure: true,                           // SSL on port 465
-  auth: {
-    user: process.env.MAIL_USER,          // support@waslney.com
-    pass: process.env.MAIL_PASS,          // your Hostinger email password
-  },
-});
+// ── Email sender via Resend HTTP API (no SMTP — works on Railway) ─────────────
+async function sendEmail(to, subject, html) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'Waslney <onboarding@resend.dev>',
+      to,
+      subject,
+      html,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Resend API error: ${errText}`);
+  }
+}
 
 // In-memory OTP store (fine for single-instance server)
 const otpStore = new Map(); // email -> { code, expires }
@@ -38,11 +47,10 @@ router.post('/send-otp', async (req, res) => {
   otpStore.set(email, { code, expires });
 
   try {
-    await transporter.sendMail({
-      from: `"Waslney" <${process.env.MAIL_USER}>`,
-      to: email,
-      subject: 'Your Waslney verification code',
-      html: `
+    await sendEmail(
+      email,
+      'Your Waslney verification code',
+      `
         <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#0d0d0d;border-radius:16px;color:#fff">
           <h2 style="color:#fbbf24;margin-bottom:8px">Verify your email</h2>
           <p style="color:#aaa;margin-bottom:24px">Use the code below to complete your Waslney registration. It expires in 10 minutes.</p>
@@ -51,15 +59,15 @@ router.post('/send-otp', async (req, res) => {
           </div>
           <p style="color:#555;font-size:12px">If you didn't request this, you can safely ignore this email.</p>
         </div>
-      `,
-    });
+      `
+    );
 
     console.log(`✉️  OTP sent to ${email}`);
     res.json({ ok: true });
 
   } catch (err) {
     console.error('Mail send error:', err);
-    res.status(500).json({ error: 'Failed to send verification email. Check MAIL_USER / MAIL_PASS in .env' });
+    res.status(500).json({ error: 'Failed to send verification email. Check RESEND_API_KEY in Railway Variables.' });
   }
 });
 
@@ -185,7 +193,6 @@ router.get('/me', requireAuth, async (req, res) => {
   }
 });
 
-
 // ── POST /api/auth/verify-reset-otp ──────────────────────────────────────────
 router.post('/verify-reset-otp', async (req, res) => {
   const { email, otp } = req.body;
@@ -226,9 +233,7 @@ router.post('/reset-password', async (req, res) => {
 });
 
 // ── POST /api/auth/admin-create-user ─────────────────────────────────────────
-// Admin-only endpoint: creates any user type with no email verification
 router.post('/admin-create-user', requireAuth, async (req, res) => {
-  // Only admins may call this
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
@@ -250,13 +255,11 @@ router.post('/admin-create-user', requireAuth, async (req, res) => {
     if (!car || !plate) return res.status(400).json({ error: 'Car model and plate required for drivers' });
   }
 
-  // Check phone not already taken
   const [[existing]] = await db.query('SELECT id FROM users WHERE phone = ?', [phone]);
   if (existing) return res.status(400).json({ error: 'Phone already registered' });
 
   try {
     const hash = await bcrypt.hash(password, 10);
-    // Admin-created accounts are active immediately (even drivers)
     const account_status = 'active';
 
     const [result] = await db.query(
@@ -266,7 +269,6 @@ router.post('/admin-create-user', requireAuth, async (req, res) => {
     );
     const userId = result.insertId;
 
-    // Save driver documents if provided
     if (role === 'driver' && (car_license_photo || driver_license_photo || criminal_record_photo)) {
       await db.query(
         `INSERT INTO driver_documents
@@ -289,8 +291,7 @@ router.post('/admin-create-user', requireAuth, async (req, res) => {
   }
 });
 
-
-// GET /api/auth/drivers — admin: list all users with role=driver (own fleet)
+// ── GET /api/auth/drivers ─────────────────────────────────────────────────────
 router.get('/drivers', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const [rows] = await db.query(
