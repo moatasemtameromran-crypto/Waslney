@@ -1,0 +1,26 @@
+# Dependencies (will be installed in Docker)
+node_modules
+frontend/node_modules
+backend/node_modules
+
+# Next.js build artifacts (not needed — app uses Vite)
+frontend/.next
+
+# Git
+.git
+.gitignore
+
+# Local dev files
+*.local
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Stray directories
+{backend
