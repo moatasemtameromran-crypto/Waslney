@@ -8,7 +8,8 @@ import AdminDash     from './pages/admin/AdminDash.jsx';
 import Toast         from './components/Toast.jsx';
 
 export const AuthContext = createContext(null);
-export const useAuth = () => useContext(AuthContext);
+// || {} prevents "Cannot destructure property of null" crashes
+export const useAuth = () => useContext(AuthContext) || {};
 
 export default function App() {
   const [user,    setUser]    = useState(null);
