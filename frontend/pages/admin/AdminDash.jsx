@@ -1,906 +1,1937 @@
-import React, { useState, useEffect } from 'react';
-import { PlaceSearch as AreaSearch } from '../../components/LeafletSearch.jsx';
-import { useAuth } from '../../App.jsx';
-import * as api from '../../api.js';
-import * as tenderApi from '../../api_tender.js';
-import { C, WaslneyLogo, Tabs, Topbar, Badge, StatCard, DetailRow, CapBar, CapBarLabeled, Stars, Inp, Sel, btnPrimary, btnSm, btnDanger, card, fmtDate, Spinner, sectSt, Avatar } from '../../components/UI.jsx';
-import { AdminMap, StopPicker } from '../../components/TripMap.jsx';
-import socket_module, { connectSocket } from '../../socket.js';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from '../../../App.jsx';
+import { StopPicker } from '../../components/TripMap.jsx';
 
-// ── Full-screen photo lightbox ─────────────────────────────────────────────
-function Lightbox({ src, label, onClose }) {
-  if (!src) return null;
-  return (
-    <div
-      onClick={onClose}
-      style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
-      <div style={{ position:'absolute', top:20, right:24, cursor:'pointer', color:'#fff', fontSize:28, lineHeight:1 }} onClick={onClose}>✕</div>
-      <p style={{ color:'#888', fontSize:12, marginBottom:16, letterSpacing:'.08em', textTransform:'uppercase' }}>{label}</p>
-      <img
-        src={src}
-        alt={label}git add Dockerfile
+const API = (path) => `/api${path}`;
+const token = () => localStorage.getItem('shuttle_token');
+const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 
-        style={{ maxWidth:'90vw', maxHeight:'80vh', objectFit:'contain', borderRadius:12, border:'1px solid #222' }}
-        onClick={e => e.stopPropagation()}
-      />
-      <a href={src} target="_blank" rel="noreferrer"
-        style={{ marginTop:16, color:'#fbbf24', fontSize:13, textDecoration:'none' }}
-        onClick={e => e.stopPropagation()}>
-        ↗ Open in new tab
-      </a>
-
-      {/* ── TENDER MODAL ── */}
-      {tenderModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
-          onClick={e => { if(e.target===e.currentTarget) setTenderModal(null); }}>
-          <div style={{ background:'#0d0d0d', border:'1px solid rgba(251,191,36,0.3)', borderRadius:20, padding:28, width:'100%', maxWidth:480, boxShadow:'0 24px 80px rgba(0,0,0,0.9)' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
-              <span style={{ fontSize:28 }}>🏷</span>
-              <div>
-                <div style={{ fontSize:18, fontWeight:800, color:'#fff' }}>Offer for Tender</div>
-                <div style={{ fontSize:12, color:'#666', marginTop:2 }}>Bus companies will bid — lowest price wins</div>
-              </div>
-              <button onClick={() => setTenderModal(null)} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'#555', fontSize:22, cursor:'pointer', lineHeight:1 }}>×</button>
-            </div>
-
-            <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.15)', borderRadius:10, padding:'10px 14px', margin:'14px 0', fontSize:13, color:'#fbbf24', fontWeight:600 }}>
-              📍 {tenderModal.fromLoc} → {tenderModal.toLoc}
-            </div>
-
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-              <div>
-                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Date *</label>
-                <input type="date" value={tenderForm.ends_date} min={new Date().toISOString().slice(0,10)}
-                  onChange={e => setTenderForm({...tenderForm, ends_date:e.target.value})}
-                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Time *</label>
-                <input type="time" value={tenderForm.ends_time}
-                  onChange={e => setTenderForm({...tenderForm, ends_time:e.target.value})}
-                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginBottom:14 }}>
-              <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Notes for companies (optional)</label>
-              <input value={tenderForm.description}
-                onChange={e => setTenderForm({...tenderForm, description:e.target.value})}
-                placeholder="e.g. A/C required, min 20 seats…"
-                style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-              />
-            </div>
-
-            {tenderErr && (
-              <div style={{ fontSize:12, color:'#f87171', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'8px 12px', marginBottom:12 }}>
-                ⚠ {tenderErr}
-              </div>
-            )}
-
-            <div style={{ display:'flex', gap:10 }}>
-              <button onClick={launchTender} disabled={tenderBusy} style={{
-                flex:1, background: tenderBusy?'#1a1a1a':'#fbbf24', color: tenderBusy?'#555':'#000',
-                border:'none', borderRadius:12, padding:'14px', cursor: tenderBusy?'default':'pointer',
-                fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:700,
-              }}>
-                {tenderBusy ? 'Launching…' : '⚡ Launch Tender'}
-              </button>
-              <button onClick={() => setTenderModal(null)} style={{ background:'transparent', color:'#555', border:'1px solid #222', borderRadius:12, padding:'14px 18px', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13 }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API(path), { headers: authHeaders(), ...opts });
+  if (!res.ok) throw new Error((await res.json()).error || 'Request failed');
+  return res.json();
 }
 
-// ── Document thumbnail ─────────────────────────────────────────────────────
-function DocThumb({ label, url, onView }) {
-  const isImage = url && (url.startsWith('data:image') || url.startsWith('http') || url.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i));
-  return (
-    <div>
-      <div style={{ fontSize:11, color:C.text3, marginBottom:6 }}>{label}</div>
-      {!url ? (
-        <div style={{ background:C.bg3, border:`1px solid ${C.redBorder}`, borderRadius:8, padding:'14px 10px', textAlign:'center', fontSize:12, color:C.red }}>
-          ⚠ Not uploaded
-        </div>
-      ) : isImage ? (
-        <div style={{ position:'relative', cursor:'pointer' }} onClick={() => onView(url, label)}>
-          <img src={url} alt={label}
-            style={{ width:'100%', height:120, objectFit:'cover', borderRadius:8, border:`1px solid ${C.border}`, display:'block' }} />
-          <div style={{ position:'absolute', inset:0, borderRadius:8, background:'rgba(0,0,0,0)', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .15s' }}
-            onMouseEnter={e => e.currentTarget.style.background='rgba(0,0,0,0.5)'}
-            onMouseLeave={e => e.currentTarget.style.background='rgba(0,0,0,0)'}>
-            <span style={{ color:'#fff', fontSize:22, opacity:0 }}
-              onMouseEnter={e => { e.currentTarget.style.opacity=1; }}
-              onMouseLeave={e => { e.currentTarget.style.opacity=0; }}>
-              🔍
-            </span>
-          </div>
-          <button onClick={() => onView(url, label)}
-            style={{ marginTop:6, width:'100%', background:C.bg3, border:`1px solid ${C.border}`, borderRadius:6, padding:'5px', color:C.text2, fontSize:11, cursor:'pointer', fontFamily:"'Sora',sans-serif" }}>
-            View full size
-          </button>
-        </div>
-      ) : (
-        <div style={{ background:C.bg3, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px', fontSize:11, color:C.text2, wordBreak:'break-all' }}>
-          <a href={url} target="_blank" rel="noreferrer" style={{ color:C.yellow||'#fbbf24' }}>↗ Open document</a>
-        </div>
-      )}
+// ── Colour palette matching the new admin system ────────────────────────────
+const C = {
+  bg: '#eef1f6',
+  white: '#fff',
+  blue: '#0065ff',
+  blueLight: '#e6f0ff',
+  sidebar: '#fff',
+  border: '#e6f0ff',
+  text: '#222',
+  muted: '#6b7280',
+  green: '#22c55e',
+  red: '#ef4444',
+  orange: '#f97316',
+};
 
-      {/* ── TENDER MODAL ── */}
-      {tenderModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
-          onClick={e => { if(e.target===e.currentTarget) setTenderModal(null); }}>
-          <div style={{ background:'#0d0d0d', border:'1px solid rgba(251,191,36,0.3)', borderRadius:20, padding:28, width:'100%', maxWidth:480, boxShadow:'0 24px 80px rgba(0,0,0,0.9)' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
-              <span style={{ fontSize:28 }}>🏷</span>
-              <div>
-                <div style={{ fontSize:18, fontWeight:800, color:'#fff' }}>Offer for Tender</div>
-                <div style={{ fontSize:12, color:'#666', marginTop:2 }}>Bus companies will bid — lowest price wins</div>
-              </div>
-              <button onClick={() => setTenderModal(null)} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'#555', fontSize:22, cursor:'pointer', lineHeight:1 }}>×</button>
-            </div>
+// ── Tiny reusable components ─────────────────────────────────────────────────
+const Btn = ({ children, onClick, variant = 'primary', small, style }) => {
+  const base = {
+    cursor: 'pointer', border: 'none', borderRadius: 6, fontWeight: 600,
+    padding: small ? '6px 14px' : '9px 20px', fontSize: small ? 13 : 14,
+    transition: 'opacity .15s',
+  };
+  const variants = {
+    primary: { background: C.blue, color: '#fff' },
+    danger:  { background: C.red, color: '#fff' },
+    ghost:   { background: C.blueLight, color: C.blue },
+    outline: { background: 'transparent', border: `1px solid ${C.border}`, color: C.text },
+  };
+  return <button style={{ ...base, ...variants[variant], ...style }} onClick={onClick}>{children}</button>;
+};
 
-            <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.15)', borderRadius:10, padding:'10px 14px', margin:'14px 0', fontSize:13, color:'#fbbf24', fontWeight:600 }}>
-              📍 {tenderModal.fromLoc} → {tenderModal.toLoc}
-            </div>
+const Input = ({ label, value, onChange, type = 'text', placeholder, style }) => (
+  <div style={{ marginBottom: 12 }}>
+    {label && <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4, color: C.text }}>{label}</label>}
+    <input
+      type={type} value={value || ''} onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        width: '100%', boxSizing: 'border-box', border: `1px solid ${C.border}`,
+        borderRadius: 6, padding: '8px 12px', fontSize: 14, outline: 'none',
+        fontFamily: 'Poppins, sans-serif', ...style
+      }}
+    />
+  </div>
+);
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-              <div>
-                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Date *</label>
-                <input type="date" value={tenderForm.ends_date} min={new Date().toISOString().slice(0,10)}
-                  onChange={e => setTenderForm({...tenderForm, ends_date:e.target.value})}
-                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Time *</label>
-                <input type="time" value={tenderForm.ends_time}
-                  onChange={e => setTenderForm({...tenderForm, ends_time:e.target.value})}
-                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-                />
-              </div>
-            </div>
+const Select = ({ label, value, onChange, options, style }) => (
+  <div style={{ marginBottom: 12 }}>
+    {label && <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4, color: C.text }}>{label}</label>}
+    <select
+      value={value || ''} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 14, background: C.white, fontFamily: 'Poppins, sans-serif', ...style }}
+    >
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  </div>
+);
 
-            <div style={{ marginBottom:14 }}>
-              <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Notes for companies (optional)</label>
-              <input value={tenderForm.description}
-                onChange={e => setTenderForm({...tenderForm, description:e.target.value})}
-                placeholder="e.g. A/C required, min 20 seats…"
-                style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-              />
-            </div>
+const Card = ({ children, style }) => (
+  <div style={{ background: C.white, borderRadius: 8, padding: 16, ...style }}>{children}</div>
+);
 
-            {tenderErr && (
-              <div style={{ fontSize:12, color:'#f87171', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'8px 12px', marginBottom:12 }}>
-                ⚠ {tenderErr}
-              </div>
-            )}
+const Table = ({ columns, data, onEdit, onDelete, extraActions }) => (
+  <div style={{ overflowX: 'auto' }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <thead>
+        <tr style={{ background: '#f9f9f9' }}>
+          {columns.map(c => (
+            <th key={c.key} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: `1px solid ${C.border}`, fontWeight: 700, position: 'relative' }}>
+              {c.label}
+            </th>
+          ))}
+          <th style={{ padding: '10px 12px', textAlign: 'left', borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {!data.length && (
+          <tr><td colSpan={columns.length + 1} style={{ padding: '24px', textAlign: 'center', color: C.muted }}>No data found</td></tr>
+        )}
+        {data.map((row, i) => (
+          <tr key={row.id || i} style={{ borderBottom: `1px solid ${C.border}` }}>
+            {columns.map(c => (
+              <td key={c.key} style={{ padding: '10px 12px' }}>
+                {c.render ? c.render(row) : String(row[c.key] ?? '-')}
+              </td>
+            ))}
+            <td style={{ padding: '10px 12px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {onEdit && <Btn small variant="ghost" onClick={() => onEdit(row)}>Edit</Btn>}
+              {extraActions && extraActions(row)}
+              {onDelete && <Btn small variant="danger" onClick={() => onDelete(row)}>Delete</Btn>}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
 
-            <div style={{ display:'flex', gap:10 }}>
-              <button onClick={launchTender} disabled={tenderBusy} style={{
-                flex:1, background: tenderBusy?'#1a1a1a':'#fbbf24', color: tenderBusy?'#555':'#000',
-                border:'none', borderRadius:12, padding:'14px', cursor: tenderBusy?'default':'pointer',
-                fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:700,
-              }}>
-                {tenderBusy ? 'Launching…' : '⚡ Launch Tender'}
-              </button>
-              <button onClick={() => setTenderModal(null)} style={{ background:'transparent', color:'#555', border:'1px solid #222', borderRadius:12, padding:'14px 18px', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13 }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+const Badge = ({ label, color }) => (
+  <span style={{ background: color + '22', color, padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+    {label}
+  </span>
+);
 
+const statusBadge = (s) => {
+  if (!s) return null;
+  const color = s === 'active' ? C.green : s === 'inactive' ? C.muted : C.orange;
+  return <Badge label={s} color={color} />;
+};
+
+const Modal = ({ title, children, onClose }) => (
+  <div style={{ position: 'fixed', inset: 0, background: '#00000066', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ background: C.white, borderRadius: 12, padding: 28, width: 520, maxWidth: '95vw', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px #0002' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{title}</h3>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: C.muted }}>×</button>
+      </div>
+      {children}
     </div>
-  );
-}
+  </div>
+);
 
-export default function AdminDash() {
-  const { user, logout, notify } = useAuth();
-  const [tab, setTab] = useState(() => sessionStorage.getItem('adm_tab') || 'overview');
-  const goTab = (t) => { sessionStorage.setItem('adm_tab', t); setTab(t); setEditTrip(null); setViewDriver(null); };
+// ── Stat card for dashboard ──────────────────────────────────────────────────
+const StatCard = ({ label, value, color = C.blue }) => (
+  <div style={{ background: C.white, borderRadius: 8, padding: '18px 20px', flex: 1, minWidth: 140 }}>
+    <div style={{ color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{label}</div>
+    <div style={{ fontSize: 28, fontWeight: 700, color }}>{value ?? 0}</div>
+  </div>
+);
 
-  const [trips,   setTrips]   = useState([]);
-  const [drivers, setDrivers] = useState([]); // active only — for dropdowns
-  const [allDrivers, setAllDrivers] = useState([]); // all statuses — for Drivers tab
-  const [users,   setUsers]   = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [editTrip, setEditTrip] = useState(null);
-  const [stops,    setStops]   = useState([]);
-  const [editStops, setEditStops] = useState([]);
+// ══════════════════════════════════════════════════════════════════════════════
+// PAGE COMPONENTS
+// ══════════════════════════════════════════════════════════════════════════════
 
-  // ── Tender state ──────────────────────────────────────────────────────────
-  const [tenderModal, setTenderModal] = useState(null); // { tripId, fromLoc, toLoc } or null
-  const [tenderForm, setTenderForm]   = useState({ ends_date:'', ends_time:'', description:'' });
-  const [tenderBusy, setTenderBusy]   = useState(false);
-  const [tenderErr,  setTenderErr]    = useState('');
-
-  // ── Review state ──────────────────────────────────────────────────────────
-  const [pendingDrivers, setPendingDrivers] = useState([]);
-  const [reviewLoading,  setReviewLoading]  = useState(false);
-  const [expandedDriver, setExpandedDriver] = useState(null);
-  const [rejectTarget,   setRejectTarget]   = useState(null);
-  const [rejectNote,     setRejectNote]     = useState('');
-
-  // ── Driver profile view ───────────────────────────────────────────────────
-  const [viewDriver, setViewDriver] = useState(null); // full driver object
-
-  // ── Lightbox ──────────────────────────────────────────────────────────────
-  const [lightbox, setLightbox] = useState(null); // { src, label }
-
-  const [form, setForm] = useState({
-    from_loc:'', to_loc:'', pickup_time:'', dropoff_time:'', date:'', price:'', total_seats:16, driver_id:''
+// ── Mini SVG Donut Chart ──────────────────────────────────────────────────────
+function DonutChart({ segments, size = 100 }) {
+  const r = 38; const cx = 50; const cy = 50;
+  const circumference = 2 * Math.PI * r;
+  const total = segments.reduce((s, x) => s + (x.value || 0), 0) || 1;
+  let offset = 0;
+  const arcs = segments.map(seg => {
+    const frac = (seg.value || 0) / total;
+    const dash = frac * circumference;
+    const arc = { dash, offset: circumference - offset, color: seg.color };
+    offset += dash;
+    return arc;
   });
-  const f = k => e => setForm({ ...form, [k]: e.target.value });
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef1f6" strokeWidth={14} />
+      {arcs.map((a, i) => (
+        <circle key={i} cx={cx} cy={cy} r={r} fill="none"
+          stroke={a.color} strokeWidth={14}
+          strokeDasharray={`${a.dash} ${circumference - a.dash}`}
+          strokeDashoffset={a.offset}
+          style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }}
+        />
+      ))}
+      <text x={cx} y={cy + 5} textAnchor="middle" fontSize="14" fontWeight="700" fill="#222">{total}</text>
+    </svg>
+  );
+}
 
-  // ── Track last searched location to pan the StopPicker map ───────────────
-  const [mapCenter, setMapCenter] = useState(null);     // { lat, lng, name } for create form
-  const [editMapCenter, setEditMapCenter] = useState(null); // { lat, lng, name } for edit form
+// ── Dashboard ────────────────────────────────────────────────────────────────
+function DashboardPage() {
+  const [stats, setStats] = useState(null);
+  const [period, setPeriod] = useState('today');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadAll();
-    loadPendingDrivers();
-    // Connect socket as admin for real-time updates
-    connectSocket(user.id, 'admin');
-    // Trip status changes (driver starts or completes trip)
-    socket_module.on('trip:status:changed', ({ tripId, status }) => {
-      setTrips(prev => prev.map(t => String(t.id) === String(tripId) ? { ...t, status } : t));
-    });
-    // Booking confirmed/cancelled (passenger books)
-    socket_module.on('booking:updated', ({ tripId, bookedSeats }) => {
-      if (bookedSeats !== undefined) {
-        setTrips(prev => prev.map(t => String(t.id) === String(tripId) ? { ...t, booked_seats: bookedSeats } : t));
-      }
-    });
-    return () => {
-      socket_module.off('trip:status:changed');
-      socket_module.off('booking:updated');
-    };
-  }, []);
-  useEffect(() => { if (tab === 'review') loadPendingDrivers(); }, [tab]);
-  useEffect(() => { if (tab === 'drivers') loadAllDrivers(); }, [tab]);
-
-  async function loadAll() {
     setLoading(true);
-    try {
-      const [t, d, u] = await Promise.all([api.getTrips(), api.getDrivers(), api.getUsers()]);
-      setTrips(t); setDrivers(d); setUsers(u);
-    } catch(e) { notify('Error', e.message, 'error'); }
-    finally { setLoading(false); }
-  }
+    apiFetch(`/admin/dashboard?period=${period}`)
+      .then(setStats).catch(() => {}).finally(() => setLoading(false));
+  }, [period]);
 
-  async function loadAllDrivers() {
-    try {
-      const rows = await api.getAllDrivers();
-      setAllDrivers(Array.isArray(rows) ? rows : []);
-    } catch(e) { notify('Error', 'Could not load drivers', 'error'); }
-  }
+  const periods = ['today', '7d', '30d'];
+  const periodLabel = { today: 'Today', '7d': 'Last 7 Days', '30d': 'Last 30 Days' };
 
-  async function loadPendingDrivers() {
-    setReviewLoading(true);
-    try {
-      const data = await api.getPendingDrivers();
-      setPendingDrivers(Array.isArray(data) ? data : (data.drivers || []));
-    } catch(e) { notify('Error', 'Could not load pending drivers', 'error'); }
-    finally { setReviewLoading(false); }
-  }
-
-  async function handleApprove(id) {
-    try {
-      await api.approveDriver(id);
-      notify('Approved ✅', 'Driver account is now active.');
-      setPendingDrivers(p => p.filter(d => d.id !== id));
-      setExpandedDriver(null);
-      loadAllDrivers();
-    } catch(e) { notify('Error', e.message, 'error'); }
-  }
-
-  async function handleReject(id) {
-    try {
-      await api.rejectDriver(id, rejectNote);
-      notify('Rejected ❌', 'Driver notified.');
-      setPendingDrivers(p => p.filter(d => d.id !== id));
-      setRejectTarget(null); setRejectNote(''); setExpandedDriver(null);
-      loadAllDrivers();
-    } catch(e) { notify('Error', e.message, 'error'); }
-  }
-
-  function openTenderModal(tripId, fromLoc, toLoc) {
-    // Pre-fill deadline to 24h from now
-    const d = new Date(Date.now() + 24*3600*1000);
-    const dateStr = d.toISOString().slice(0,10);
-    const timeStr = d.toTimeString().slice(0,5);
-    setTenderForm({ ends_date: dateStr, ends_time: timeStr, description:'' });
-    setTenderErr('');
-    setTenderModal({ tripId, fromLoc, toLoc });
-  }
-
-  async function launchTender() {
-    if (!tenderForm.ends_date || !tenderForm.ends_time) { setTenderErr('Set deadline date and time'); return; }
-    const endsAt  = new Date(`${tenderForm.ends_date}T${tenderForm.ends_time}`);
-    const minutes = Math.round((endsAt - Date.now()) / 60000);
-    if (minutes < 5) { setTenderErr('Deadline must be at least 5 minutes from now'); return; }
-    setTenderBusy(true); setTenderErr('');
-    try {
-      await tenderApi.createTender(
-        { trip_id: tenderModal.tripId, duration_minutes: minutes, description: tenderForm.description },
-        api.getToken ? api.getToken() : localStorage.getItem('token')
-      );
-      notify('Tender launched! 🏷', `${tenderModal.fromLoc} → ${tenderModal.toLoc} is now open for bids.`);
-      setTenderModal(null);
-      loadAll();
-    } catch(e) { setTenderErr(e.message); }
-    finally { setTenderBusy(false); }
-  }
-
-  async function handleCreate() {
-    const { from_loc, to_loc, pickup_time, date, price } = form;
-    if (!from_loc||!to_loc||!pickup_time||!date||!price) {
-      notify('Incomplete', 'Fill in all required fields.', 'error'); return;
-    }
-    if (stops.length < 2) {
-      notify('Add stops', 'Add at least 1 pickup and 1 drop-off on the map.', 'error'); return;
-    }
-    try {
-      await api.createTrip({ ...form, price: parseFloat(form.price), total_seats: parseInt(form.total_seats)||16, stops });
-      notify('Trip created!', `${from_loc} → ${to_loc} on ${date}`);
-      setForm({ from_loc:'', to_loc:'', pickup_time:'', dropoff_time:'', date:'', price:'', total_seats:16, driver_id:'' });
-      setStops([]);
-      setMapCenter(null);
-      loadAll(); goTab('trips');
-    } catch(e) { notify('Error', e.message, 'error'); }
-  }
-
-  async function handleSaveEdit() {
-    try {
-      await api.updateTrip(editTrip.id, {
-        from_loc: editTrip.from_loc, to_loc: editTrip.to_loc,
-        pickup_time: editTrip.pickup_time, dropoff_time: editTrip.dropoff_time,
-        date: editTrip.date, price: parseFloat(editTrip.price),
-        driver_id: editTrip.driver_id, stops: editStops,
-      });
-      notify('Trip updated', 'Changes saved.');
-      setEditTrip(null); setEditStops([]); setEditMapCenter(null);
-      loadAll();
-    } catch(e) { notify('Error', e.message, 'error'); }
-  }
-
-  async function handleCancel(id) {
-    try {
-      await api.deleteTrip(id);
-      notify('Trip cancelled', 'Passengers notified.');
-      loadAll();
-    } catch(e) { notify('Error', e.message, 'error'); }
-  }
-
-  async function handleDeletePermanent(id) {
-    if (!window.confirm('Permanently delete this trip from the database? This cannot be undone.')) return;
-    try {
-      await api.deleteTripPermanent(id);
-      notify('Trip deleted', 'Trip permanently removed from database.');
-      loadAll();
-    } catch(e) { notify('Error', e.message, 'error'); }
-  }
-
-  const activeCount  = trips.filter(t => t.status==='upcoming'||t.status==='active').length;
-  const totalBooked  = trips.reduce((s,t) => s+(t.booked_seats||0), 0);
-  const passengers   = users.filter(u => u.role==='passenger');
-  const driverUsers  = drivers; // active only, for dropdowns
-
-  // ── Status badge helper ───────────────────────────────────────────────────
-  function statusBadge(s) {
-    if (s === 'active')         return <Badge type="green">Active</Badge>;
-    if (s === 'pending_review') return <Badge type="amber">Pending Review</Badge>;
-    if (s === 'rejected')       return <Badge type="red">Rejected</Badge>;
-    return <Badge type="amber">{s}</Badge>;
-  }
+  const bookingSegments = stats ? [
+    { label: 'Booked',    value: stats.booked_bookings    || 0, color: C.green },
+    { label: 'Active',    value: stats.active_bookings    || 0, color: C.blue },
+    { label: 'Completed', value: stats.completed_bookings || 0, color: '#8b5cf6' },
+    { label: 'Missed',    value: stats.missed_bookings    || 0, color: C.orange },
+    { label: 'Cancelled', value: stats.cancelled_bookings || 0, color: C.red },
+  ] : [];
 
   return (
-    <div style={{ minHeight:'100vh', background:C.bg }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <div>
+      <style>{`@keyframes dashSpin { to { transform: rotate(360deg); } }`}</style>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Dashboard</h2>
+          <p style={{ margin: '2px 0 0', fontSize: 13, color: C.muted }}>Overview of shuttle operations</p>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {periods.map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              style={{ padding: '7px 16px', borderRadius: 8, border: `1px solid ${C.border}`, cursor: 'pointer', fontSize: 13,
+                background: period === p ? C.blue : C.white, color: period === p ? '#fff' : C.text, fontWeight: 600, transition: 'all .15s' }}>
+              {periodLabel[p]}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {/* Lightbox */}
-      {lightbox && <Lightbox src={lightbox.src} label={lightbox.label} onClose={() => setLightbox(null)} />}
-
-      <Topbar role="admin" name={user?.name || 'Admin'} onLogout={logout} />
-      <div style={{ maxWidth:960, margin:'0 auto', padding:'28px 20px' }}>
-
-        <Tabs tabs={[
-          { id:'overview',   label:'Overview' },
-          { id:'create',     label:'+ Trip' },
-          { id:'trips',      label:'Trips' },
-          { id:'drivers',    label:'Drivers' },
-          { id:'passengers', label:'Passengers' },
-          { id:'review',     label:`📋 Review${pendingDrivers.length > 0 ? ` (${pendingDrivers.length})` : ''}` },
-        ]} active={tab} onSet={goTab} />
-
-        {/* ── OVERVIEW ── */}
-        {tab === 'overview' && (
-          <div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 }}>
-              <StatCard num={activeCount}                                               label="Active trips"   color={C.blue} />
-              <StatCard num={totalBooked}                                               label="Seats booked"   color={C.green} />
-              <StatCard num={allDrivers.filter(d=>d.account_status==='active').length || driverUsers.length} label="Active drivers"  color={C.purple} />
-              <StatCard num={passengers.length}                                         label="Passengers"     color={C.amber} />
-            </div>
-            {pendingDrivers.length > 0 && (
-              <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.2)', borderRadius:10, padding:'14px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}
-                onClick={() => goTab('review')}>
-                <span style={{ fontSize:20 }}>⏳</span>
-                <span style={{ color:'#fbbf24', fontSize:13, fontWeight:600 }}>{pendingDrivers.length} driver{pendingDrivers.length!==1?'s':''} waiting for review</span>
-                <span style={{ marginLeft:'auto', color:'#fbbf24', fontSize:12 }}>Review now →</span>
-              </div>
-            )}
-            <p style={sectSt}>Live driver locations</p>
-            <AdminMap height={340} />
-            <p style={sectSt}>Recent trips</p>
-            {loading && <Spinner />}
-            {trips.slice(0,6).map(t => (
-              <div key={t.id} style={{ ...card, marginBottom:10 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <Badge type={t.status==='completed'?'blue':t.status==='active'?'green':t.status==='cancelled'?'red':'amber'}>{t.status}</Badge>
-                  <span style={{ fontWeight:400 }}>{t.from_loc} → {t.to_loc}</span>
-                  <span style={{ marginLeft:'auto', fontSize:12, color:C.text2 }}>{t.booked_seats||0}/{t.total_seats} seats</span>
-                </div>
-                <CapBar booked={t.booked_seats||0} total={t.total_seats} />
+      {loading ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: C.muted, padding: 60, justifyContent: 'center' }}>
+          <div style={{ width: 20, height: 20, border: `2px solid ${C.border}`, borderTopColor: C.blue, borderRadius: '50%', animation: 'dashSpin .7s linear infinite' }} />
+          Loading dashboard…
+        </div>
+      ) : stats ? (
+        <>
+          {/* KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 14, marginBottom: 24 }}>
+            {[
+              { label: 'Total Bookings', value: stats.total_bookings,                    color: C.blue,    icon: '🎟️' },
+              { label: 'Booked',         value: stats.booked_bookings,                   color: C.green,   icon: '✅' },
+              { label: 'Active',         value: stats.active_bookings,                   color: C.blue,    icon: '🚌' },
+              { label: 'Completed',      value: stats.completed_bookings,                color: '#8b5cf6', icon: '🏁' },
+              { label: 'Missed',         value: stats.missed_bookings,                   color: C.orange,  icon: '⚠️' },
+              { label: 'Cancelled',      value: stats.cancelled_bookings,                color: C.red,     icon: '❌' },
+              { label: 'Revenue (EGP)',  value: Math.round(stats.total_earning || 0),   color: C.green,   icon: '💰' },
+              { label: 'New Users',      value: stats.new_users,                         color: C.blue,    icon: '👤' },
+            ].map(({ label, value, color, icon }) => (
+              <div key={label} style={{ background: C.white, borderRadius: 12, padding: '16px 18px', borderLeft: `4px solid ${color}`, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1 }}>{value ?? 0}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
               </div>
             ))}
           </div>
-        )}
 
-        {/* ── CREATE TRIP ── */}
-        {tab === 'create' && (
-          <div style={card}>
-            <p style={sectSt}>New trip</p>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-              <AreaSearch label="📍 Pickup area"   placeholder="e.g. Nasr City…" icon="📍" value={form.from_loc?{name:form.from_loc}:null} onChange={c=>{ setForm({...form,from_loc:c?c.name:''}); if(c?.lat) setMapCenter({lat:c.lat,lng:c.lng,name:c.name}); }} />
-              <AreaSearch label="🏁 Drop-off area" placeholder="e.g. Maadi…"     icon="🏁" value={form.to_loc?{name:form.to_loc}:null}   onChange={c=>{ setForm({...form,to_loc:c?c.name:''}); if(c?.lat) setMapCenter({lat:c.lat,lng:c.lng,name:c.name}); }} />
-              <Inp label="📅 Date"             type="date"   value={form.date}         onChange={f('date')} />
-              <Inp label="🕐 Pickup time"      type="time"   value={form.pickup_time}  onChange={f('pickup_time')} />
-              <Inp label="🕐 Est. drop-off"    type="time"   value={form.dropoff_time} onChange={f('dropoff_time')} />
-              <Inp label="💰 Price/seat (EGP)" type="number" value={form.price}        onChange={f('price')}       placeholder="45" />
-              <Inp label="💺 Total seats"      type="number" value={form.total_seats}  onChange={f('total_seats')} />
+          {/* Charts row */}
+          <div style={{ display: 'grid', gridTemplateColumns: stats.revenue_chart?.length ? '2fr 1fr' : '1fr', gap: 16, marginBottom: 20 }}>
+            {stats.revenue_chart?.length > 0 && (
+              <Card style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>Revenue Trend</h4>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>Daily revenue (EGP)</p>
+                  </div>
+                  <span style={{ fontSize: 11, background: C.blueLight, color: C.blue, padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>
+                    {periodLabel[period]}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140 }}>
+                  {stats.revenue_chart.map((d, i) => {
+                    const maxRev = Math.max(...stats.revenue_chart.map(x => x.revenue), 1);
+                    const h = Math.max(4, (d.revenue / maxRev) * 100);
+                    const isLast = i === stats.revenue_chart.length - 1;
+                    return (
+                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 9, color: C.muted, fontWeight: 600 }}>{d.revenue > 0 ? d.revenue : ''}</span>
+                        <div title={`${d.revenue} EGP`}
+                          style={{ width: '100%', height: `${h}%`, background: isLast ? C.blue : C.blueLight,
+                            borderRadius: '4px 4px 0 0', border: `1px solid ${C.blue}33` }} />
+                        <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>{d.date?.slice(5)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            {/* Booking Status Donut */}
+            <Card style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+              <h4 style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 15 }}>Booking Status</h4>
+              <p style={{ margin: '0 0 16px', fontSize: 12, color: C.muted }}>Distribution</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <DonutChart segments={bookingSegments} size={90} />
+                <div style={{ flex: 1 }}>
+                  {bookingSegments.map(s => (
+                    <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: C.muted }}>{s.label}</span>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: s.color }}>{s.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Top Routes */}
+          {stats.top_routes?.length > 0 && (
+            <Card style={{ marginBottom: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+              <h4 style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 15 }}>🛤️ Top Routes</h4>
+              {stats.top_routes.map((r, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 8, background: C.blueLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: C.blue }}>{i + 1}</div>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{r.route_name}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 12, color: C.muted }}>{r.total_bookings} bookings</span>
+                    <div style={{ width: 80, height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.min(100, (r.total_bookings / (stats.top_routes[0]?.total_bookings || 1)) * 100)}%`, height: '100%', background: C.blue, borderRadius: 3 }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
+        </>
+      ) : (
+        <Card><p style={{ color: C.muted, textAlign: 'center' }}>No data available for this period.</p></Card>
+      )}
+    </div>
+  );
+}
+
+// ── Generic CRUD page factory ─────────────────────────────────────────────────
+function useCrud(endpoint) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    apiFetch(endpoint).then(setItems).catch(e => setError(e.message)).finally(() => setLoading(false));
+  }, [endpoint]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const create = async (body) => { const r = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) }); load(); return r; };
+  const update = async (id, body) => { const r = await apiFetch(`${endpoint}/${id}`, { method: 'PUT', body: JSON.stringify(body) }); load(); return r; };
+  const remove = async (id) => { await apiFetch(`${endpoint}/${id}`, { method: 'DELETE' }); load(); };
+
+  return { items, loading, error, load, create, update, remove };
+}
+
+// ── Stops ────────────────────────────────────────────────────────────────────
+// ── Stops (with Leaflet Map) ──────────────────────────────────────────────────
+function StopsPage() {
+  const { items, loading, create, update, remove } = useCrud('/shuttle/stops');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [mapStops, setMapStops] = useState([]);
+  const mapRef = useRef(null);
+  const leafletMap = useRef(null);
+  const markers = useRef([]);
+
+  // Initialize overview Leaflet map
+  useEffect(() => {
+    if (!document.querySelector('#leaflet-css')) {
+      const css = document.createElement('link');
+      css.id = 'leaflet-css'; css.rel = 'stylesheet';
+      css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(css);
+    }
+    const init = () => {
+      if (!mapRef.current || leafletMap.current) return;
+      const L = window.L;
+      const map = L.map(mapRef.current, { center: [30.0626, 31.2497], zoom: 11 });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+      leafletMap.current = map;
+    };
+    if (window.L) { init(); }
+    else if (!document.querySelector('#leaflet-js')) {
+      const js = document.createElement('script');
+      js.id = 'leaflet-js'; js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      js.onload = init;
+      document.head.appendChild(js);
+    } else {
+      const wait = setInterval(() => { if (window.L) { clearInterval(wait); init(); } }, 200);
+    }
+    return () => { if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; } };
+  }, []);
+
+  // Redraw markers when items change
+  useEffect(() => {
+    if (!leafletMap.current || !window.L || !items.length) return;
+    const L = window.L; const map = leafletMap.current;
+    markers.current.forEach(m => { try { map.removeLayer(m); } catch(_){} });
+    markers.current = [];
+    const bounds = [];
+    items.forEach(s => {
+      const lat = parseFloat(s.lat); const lng = parseFloat(s.lng);
+      if (isNaN(lat) || isNaN(lng)) return;
+      const isActive = s.status === 'active';
+      const icon = L.divIcon({
+        html: `<div style="background:${isActive ? C.blue : C.muted};border:3px solid #fff;border-radius:50%;width:18px;height:18px;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [18, 18], iconAnchor: [9, 9], className: '',
+      });
+      const m = L.marker([lat, lng], { icon }).addTo(map)
+        .bindPopup(`<b style="font-family:Poppins,sans-serif;font-size:13px">${s.name}</b><br/><span style="font-size:11px;color:#666">${s.address || ''}</span>`);
+      markers.current.push(m);
+      bounds.push([lat, lng]);
+    });
+    if (bounds.length) { try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 }); } catch(_){} }
+  }, [items]);
+
+  const openAdd = () => { setMapStops([]); setForm({ status: 'active', radius: 100 }); setModal('add'); };
+  const openEdit = (row) => {
+    const existing = [];
+    const lat = parseFloat(row.lat); const lng = parseFloat(row.lng);
+    if (!isNaN(lat) && !isNaN(lng)) existing.push({ type: 'pickup', lat: row.lat, lng: row.lng, label: row.name || '' });
+    setMapStops(existing);
+    setForm(row);
+    setModal('edit');
+  };
+  const save = async () => {
+    const fd = { ...form };
+    if (mapStops.length > 0) { fd.lat = mapStops[0].lat; fd.lng = mapStops[0].lng; }
+    if (modal === 'add') await create(fd); else await update(fd.id, fd);
+    setModal(null);
+  };
+
+  const fv = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>Stops Management</h2>
+          <p style={{ margin: '2px 0 0', fontSize: 13, color: C.muted }}>{items.length} stops configured</p>
+        </div>
+        <Btn onClick={openAdd}>+ Add Stop</Btn>
+      </div>
+
+      {/* Map Overview Card */}
+      <Card style={{ marginBottom: 16, padding: 0, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>📍</span>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Stops Map Overview</span>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: C.muted }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: C.blue, marginRight: 4 }} />Active
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: C.muted, margin: '0 4px 0 10px' }} />Inactive
+          </span>
+        </div>
+        <div ref={mapRef} style={{ height: 320, width: '100%', background: '#eef1f6' }} />
+      </Card>
+
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'name', label: 'Name' },
+              { key: 'address', label: 'Stop Location' },
+              { key: 'lat', label: 'Lat', render: r => r.lat ? parseFloat(r.lat).toFixed(4) : '—' },
+              { key: 'lng', label: 'Lng', render: r => r.lng ? parseFloat(r.lng).toFixed(4) : '—' },
+              { key: 'radius', label: 'Radius', render: r => `${r.radius || 0}m` },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={items}
+            onEdit={openEdit}
+            onDelete={r => { if (window.confirm('Delete stop?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Stop' : 'Edit Stop'} onClose={() => setModal(null)}>
+          <Input label="Name *" {...fv('name')} />
+          <Input label="Address" {...fv('address')} />
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: C.text }}>
+              📍 Pick Location on Map
+              <span style={{ fontSize: 11, color: C.muted, fontWeight: 400, marginLeft: 6 }}>(click map to place pin, or enter coords below)</span>
+            </label>
+            <StopPicker
+              stops={mapStops}
+              onChange={stops => {
+                setMapStops(stops);
+                if (stops.length > 0) setForm(p => ({ ...p, lat: stops[0].lat, lng: stops[0].lng }));
+                else setForm(p => ({ ...p, lat: '', lng: '' }));
+              }}
+              height={260}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Latitude" {...fv('lat')} type="number" placeholder="Auto-filled from map" />
+            <Input label="Longitude" {...fv('lng')} type="number" placeholder="Auto-filled from map" />
+          </div>
+          <Input label="Radius (meters)" {...fv('radius')} type="number" />
+          <Select label="Status" {...fv('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+function RoutesPage() {
+  const { items, loading, create, update, remove } = useCrud('/shuttle/routes');
+  const { items: stops } = useCrud('/shuttle/stops');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [selectedStops, setSelectedStops] = useState([]);
+
+  const openAdd = () => { setForm({ status: 'active', customer_fare: 0, driver_fare: 0 }); setSelectedStops([]); setModal('add'); };
+  const openEdit = (row) => { setForm(row); setSelectedStops((row.stops || []).map(s => s.id)); setModal('edit'); };
+  const save = async () => {
+    const body = { ...form, stop_ids: selectedStops };
+    if (modal === 'add') await create(body); else await update(form.id, body);
+    setModal(null);
+  };
+
+  const toggleStop = (id) => setSelectedStops(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Routes Management</h2>
+        <Btn onClick={openAdd}>+ Add Route</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'name', label: 'Route' },
+              { key: 'stop_count', label: 'Number of Stops' },
+              { key: 'customer_fare', label: 'Customer Fare Per Route' },
+              { key: 'driver_fare', label: 'Driver Fare Per Route' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={items}
+            onEdit={openEdit}
+            onDelete={r => { if (window.confirm('Delete route?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Route' : 'Edit Route'} onClose={() => setModal(null)}>
+          <Input label="Route Name *" {...f('name')} />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Customer Fare" {...f('customer_fare')} type="number" />
+            <Input label="Driver Fare" {...f('driver_fare')} type="number" />
+          </div>
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>Stops</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {stops.map(s => (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={selectedStops.includes(s.id)} onChange={() => toggleStop(s.id)} />
+                  {s.name}
+                </label>
+              ))}
             </div>
-            <Sel label="🚐 Assign driver (optional)" value={form.driver_id} onChange={f('driver_id')}>
-              <option value="">Select active driver…</option>
-              {driverUsers.map(d => <option key={d.id} value={d.id}>{d.name} — {d.plate}</option>)}
-            </Sel>
-            <p style={{ ...sectSt, marginTop:20 }}>🗺️ Set pickup & drop-off points on map</p>
-            <p style={{ fontSize:12, color:C.text3, marginBottom:12 }}>Click map to add pickup 🟢 and drop-off 🔵 points.</p>
-            <StopPicker stops={stops} onChange={setStops} height={340} centerOn={mapCenter} />
-            {/* ── Tender option inside Create ── */}
-            <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.2)', borderRadius:12, padding:'14px 16px', marginTop:8 }}>
-              <div style={{ fontSize:13, fontWeight:600, color:'#fbbf24', marginBottom:4 }}>🏷 Offer this trip for tender instead?</div>
-              <div style={{ fontSize:12, color:'#555', marginBottom:10 }}>Skip assigning a driver — publish the trip for bus companies to bid on.</div>
-              <button
-                onClick={async () => {
-                  const { from_loc, to_loc, date } = form;
-                  if (!from_loc||!to_loc||!date) { notify('Incomplete','Fill from, to, and date first.','error'); return; }
-                  if (stops.length < 2) { notify('Add stops','Add at least 1 pickup and 1 drop-off on the map.','error'); return; }
-                  // Create the trip first (without driver), then open tender modal
-                  try {
-                    const created = await api.createTrip({ ...form, price: parseFloat(form.price)||0, total_seats: parseInt(form.total_seats)||16, stops });
-                    setForm({ from_loc:'', to_loc:'', pickup_time:'', dropoff_time:'', date:'', price:'', total_seats:16, driver_id:'' });
-                    setStops([]); setMapCenter(null);
-                    loadAll();
-                    openTenderModal(created.id || created.trip_id, from_loc, to_loc);
-                  } catch(e) { notify('Error', e.message, 'error'); }
-                }}
-                style={{ background:'rgba(251,191,36,0.12)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.3)', borderRadius:8, padding:'9px 20px', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:600 }}
-              >
-                🏷 Create & offer for tender →
-              </button>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Vehicles ─────────────────────────────────────────────────────────────────
+function VehiclesPage() {
+  const { items, loading, create, update, remove } = useCrud('/shuttle/vehicles');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const openAdd = () => { setForm({ status: 'active' }); setModal('add'); };
+  const openEdit = (row) => { setForm(row); setModal('edit'); };
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Vehicle</h2>
+        <Btn onClick={openAdd}>+ Add Vehicle</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'vehicle_type_name', label: 'Vehicle Type' },
+              { key: 'brand', label: 'Brand' },
+              { key: 'model_name', label: 'Model Name' },
+              { key: 'vehicle_number', label: 'Vehicle Number' },
+              { key: 'seats', label: 'Number of Seats' },
+              { key: 'doors', label: 'Number of Doors' },
+              { key: 'total_rows', label: 'Total Rows' },
+              { key: 'total_columns', label: 'Total Columns' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={items}
+            onEdit={openEdit}
+            onDelete={r => { if (window.confirm('Delete vehicle?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Vehicle' : 'Edit Vehicle'} onClose={() => setModal(null)}>
+          <Input label="Brand *" {...f('brand')} />
+          <Input label="Model Name *" {...f('model_name')} />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Number of Seats" {...f('seats')} type="number" />
+            <Input label="Number of Doors" {...f('doors')} type="number" />
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Total Rows" {...f('total_rows')} type="number" />
+            <Input label="Total Columns" {...f('total_columns')} type="number" />
+          </div>
+          <Input label="Vehicle Number *" {...f('vehicle_number')} />
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Vehicle Types ─────────────────────────────────────────────────────────────
+function VehicleTypesPage() {
+  const { items, loading, create, update, remove } = useCrud('/vehicle-types');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const openAdd = () => { setForm({ status: 'active' }); setModal('add'); };
+  const openEdit = (row) => { setForm(row); setModal('edit'); };
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Vehicle Type</h2>
+        <Btn onClick={openAdd}>+ Add Vehicle</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'name', label: 'Vehicle Name' },
+              { key: 'vehicle_type', label: 'Vehicle Type' },
+              { key: 'seats', label: 'Seats' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={items}
+            onEdit={openEdit}
+            onDelete={r => { if (window.confirm('Delete vehicle type?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Vehicle Type' : 'Edit Vehicle Type'} onClose={() => setModal(null)}>
+          <Input label="Vehicle Name *" {...f('name')} />
+          <Select label="Ride Type" {...f('ride_type')} options={[{ value: '', label: 'Select' }, { value: 'shuttle', label: 'Shuttle' }, { value: 'on_demand', label: 'On Demand' }]} />
+          <Select label="Vehicle Type" {...f('vehicle_type')} options={[{ value: '', label: 'Select' }, { value: 'bus', label: 'Bus' }, { value: 'hiace', label: 'Hiace' }, { value: 'coaster', label: 'Coaster' }, { value: 'car', label: 'Car' }]} />
+          <Input label="Seats" {...f('seats')} type="number" />
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Fares ────────────────────────────────────────────────────────────────────
+function FaresPage() {
+  const { items, loading, create, update, remove } = useCrud('/shuttle/fares');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const openAdd = () => { setForm({ status: 'active', fare_type: 'fare_per_km', base_fare: 0, fare_per_stop: 0, fare_per_km: 0 }); setModal('add'); };
+  const openEdit = (row) => { setForm(row); setModal('edit'); };
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Fare</h2>
+        <Btn onClick={openAdd}>+ Add Fare</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'Fare ID' },
+              { key: 'fare_type', label: 'Type' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+              { key: 'fare_per_stop', label: 'Fare Per Stop' },
+              { key: 'base_fare', label: 'Base Fare' },
+              { key: 'fare_per_km', label: 'Fare per Km' },
+            ]}
+            data={items}
+            onEdit={openEdit}
+            onDelete={r => { if (window.confirm('Delete fare?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Fare' : 'Edit Fare'} onClose={() => setModal(null)}>
+          <Select label="Fare Type *" {...f('fare_type')} options={[{ value: 'fare_per_km', label: 'Fare Per Km' }, { value: 'fare_per_stop', label: 'Fare Per Stop' }, { value: 'flat', label: 'Flat' }]} />
+          <Input label="Fare Per Stop" {...f('fare_per_stop')} type="number" />
+          <Input label="Base Fare" {...f('base_fare')} type="number" />
+          <Input label="Fare Per Km" {...f('fare_per_km')} type="number" />
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Trips (Journey) ──────────────────────────────────────────────────────────
+function TripsPage() {
+  const { items, loading, create, update, remove } = useCrud('/shuttle/trips');
+  const { items: routes } = useCrud('/shuttle/routes');
+  const { items: vehicles } = useCrud('/shuttle/vehicles');
+  const { items: drivers } = useCrud('/users/drivers');
+  const { items: policies } = useCrud('/cancellation/policies');
+  const { items: promos } = useCrud('/promotions');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [weekDays, setWeekDays] = useState([]);
+
+  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  const openAdd = () => { setForm({ status: 'active' }); setWeekDays([]); setModal('add'); };
+  const openEdit = (row) => {
+    setForm(row);
+    setWeekDays(row.week_days ? row.week_days.split(',') : []);
+    setModal('edit');
+  };
+  const save = async () => {
+    const body = { ...form, week_days: weekDays };
+    if (modal === 'add') await create(body); else await update(form.id, body);
+    setModal(null);
+  };
+  const toggleDay = (d) => setWeekDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Trip</h2>
+        <Btn onClick={openAdd}>+ Add Trip</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'route_name', label: 'Route' },
+              { key: 'start_time', label: 'Start Time' },
+              { key: 'vehicle_name', label: 'Vehicle' },
+              { key: 'driver_name', label: 'Driver' },
+              { key: 'week_days', label: 'Days' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={items}
+            onEdit={openEdit}
+            onDelete={r => { if (window.confirm('Delete trip?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Trip' : 'Edit Trip'} onClose={() => setModal(null)}>
+          <Select label="Select Route *" {...f('route_id')} options={[{ value: '', label: 'Select route' }, ...routes.map(r => ({ value: r.id, label: r.name }))]} />
+          <Input label="Start Time *" {...f('start_time')} placeholder="HH:MM" />
+          <Select label="Select Vehicle" {...f('vehicle_id')} options={[{ value: '', label: 'Select vehicle' }, ...vehicles.map(v => ({ value: v.id, label: `${v.model_name} (${v.vehicle_number})` }))]} />
+          <Select label="Drivers" {...f('driver_id')} options={[{ value: '', label: 'Select driver' }, ...drivers.map(d => ({ value: d.id, label: d.name }))]} />
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>Week Days *</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {DAYS.map(d => (
+                <button key={d} onClick={() => toggleDay(d)} style={{
+                  padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 13,
+                  background: weekDays.includes(d) ? C.blue : C.blueLight,
+                  color: weekDays.includes(d) ? '#fff' : C.blue,
+                  border: 'none', fontWeight: 600
+                }}>{d}</button>
+              ))}
             </div>
-            <button onClick={handleCreate} style={btnPrimary}>Create trip</button>
+          </div>
+          <Select label="Cancellation Policy" {...f('cancellation_policy_id')} options={[{ value: '', label: 'None' }, ...policies.map(p => ({ value: p.id, label: p.name }))]} />
+          <Select label="Promotion" {...f('promotion_id')} options={[{ value: '', label: 'None' }, ...promos.map(p => ({ value: p.id, label: p.title }))]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Booking Analytics ─────────────────────────────────────────────────────────
+function BookingsAnalyticsPage() {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const load = () => {
+    setLoading(true);
+    const q = new URLSearchParams();
+    if (startDate) q.set('start_date', startDate);
+    if (endDate) q.set('end_date', endDate);
+    apiFetch(`/admin/dashboard/bookings?${q}`).then(setBookings).catch(() => {}).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const exportCSV = () => {
+    if (!bookings.length) return;
+    const keys = Object.keys(bookings[0]);
+    const csv = [keys.join(','), ...bookings.map(r => keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = 'bookings.csv'; a.click();
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Analytics — Bookings</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 13 }} />
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 13 }} />
+          <Btn small variant="ghost" onClick={load}>Filter</Btn>
+          <Btn small variant="outline" onClick={exportCSV}>Export CSV</Btn>
+        </div>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'booking_id', label: 'Booking ID' },
+              { key: 'passenger_name', label: 'User' },
+              { key: 'from_loc', label: 'Trip' },
+              { key: 'travel_date', label: 'Date' },
+              { key: 'pickup_time', label: 'Time' },
+              { key: 'seats', label: 'Seats' },
+              { key: 'effective_price', label: 'Amount' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={bookings}
+          />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── Cancellation ──────────────────────────────────────────────────────────────
+function CancellationPage() {
+  const { items, loading, create, update, remove } = useCrud('/cancellation/policies');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Cancellation</h2>
+        <Btn onClick={() => { setForm({ status: 'active', applicable_for_pass: 0 }); setModal('add'); }}>+ Add Cancellation Policy</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'name', label: 'Name' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+              { key: 'applicable_for_pass', label: 'Applicable for Shuttle Pass', render: r => r.applicable_for_pass ? 'Yes' : 'No' },
+            ]}
+            data={items}
+            onEdit={r => { setForm(r); setModal('edit'); }}
+            onDelete={r => { if (window.confirm('Delete policy?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Policy' : 'Edit Policy'} onClose={() => setModal(null)}>
+          <Input label="Name *" {...f('name')} />
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
+            <input type="checkbox" checked={!!form.applicable_for_pass} onChange={e => setForm(p => ({ ...p, applicable_for_pass: e.target.checked ? 1 : 0 }))} />
+            Applicable for Shuttle Pass
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Cancellation Reasons ──────────────────────────────────────────────────────
+function CancellationReasonsPage() {
+  const { items, loading, create, update, remove } = useCrud('/cancellation/reasons');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Cancellation Reasons</h2>
+        <Btn onClick={() => { setForm({ status: 'active' }); setModal('add'); }}>+ Add Reason</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[{ key: 'id', label: 'ID' }, { key: 'name', label: 'Name' }, { key: 'status', label: 'Status', render: r => statusBadge(r.status) }]}
+            data={items}
+            onEdit={r => { setForm(r); setModal('edit'); }}
+            onDelete={r => { if (window.confirm('Delete reason?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Reason' : 'Edit Reason'} onClose={() => setModal(null)}>
+          <Input label="Name *" {...f('name')} />
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Promotions ────────────────────────────────────────────────────────────────
+function PromotionsPage() {
+  const { items, loading, create, update, remove } = useCrud('/promotions');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Promotions</h2>
+        <Btn onClick={() => { setForm({ status: 'active', promo_type: 'flat' }); setModal('add'); }}>+ Add Promotions</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'title', label: 'Title' },
+              { key: 'promo_type', label: 'Promo Type' },
+              { key: 'discount_value', label: 'Discount Values' },
+              { key: 'discount_percentage', label: 'Discount %' },
+              { key: 'max_discount', label: 'Max Discount' },
+              { key: 'start_date', label: 'Start Date' },
+              { key: 'end_date', label: 'End Date' },
+              { key: 'max_per_user', label: 'Max Per User' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+              { key: 'promo_code', label: 'Promo Code' },
+            ]}
+            data={items}
+            onEdit={r => { setForm(r); setModal('edit'); }}
+            onDelete={r => { if (window.confirm('Delete promotion?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Promotion' : 'Edit Promotion'} onClose={() => setModal(null)}>
+          <Input label="Title *" {...f('title')} />
+          <Input label="Promo Code *" {...f('promo_code')} />
+          <Select label="Promo Type" {...f('promo_type')} options={[{ value: 'flat', label: 'Flat' }, { value: 'percentage', label: 'Percentage' }]} />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Discount Value" {...f('discount_value')} type="number" />
+            <Input label="Discount %" {...f('discount_percentage')} type="number" />
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Max Discount" {...f('max_discount')} type="number" />
+            <Input label="Max Per User" {...f('max_per_user')} type="number" />
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Start Date" {...f('start_date')} type="date" />
+            <Input label="End Date" {...f('end_date')} type="date" />
+          </div>
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Suggested Routes ──────────────────────────────────────────────────────────
+function SuggestedRoutesPage() {
+  const { items, loading, remove } = useCrud('/suggested-routes');
+
+  const exportCSV = () => {
+    if (!items.length) return;
+    const keys = ['id', 'user_name', 'user_phone', 'pickup_address', 'dropoff_address', 'shift_description', 'created_at'];
+    const csv = [keys.join(','), ...items.map(r => keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = 'suggested-routes.csv'; a.click();
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Suggested Routes</h2>
+        <Btn small variant="outline" onClick={exportCSV}>Export CSV</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'Route ID' },
+              { key: 'user_name', label: 'User Name' },
+              { key: 'user_phone', label: 'Phone Number' },
+              { key: 'pickup_address', label: 'Pickup Address' },
+              { key: 'dropoff_address', label: 'Drop Address' },
+              { key: 'shift_description', label: 'Shift Description' },
+            ]}
+            data={items}
+            onDelete={r => { if (window.confirm('Delete suggested route?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── Holiday ───────────────────────────────────────────────────────────────────
+function HolidayPage() {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [holidays, setHolidays] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => {
+    setLoading(true);
+    apiFetch(`/holidays?year=${year}&month=${month}`).then(setHolidays).catch(() => {}).finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, [year, month]);
+
+  const getDays = () => {
+    const days = [];
+    const d = new Date(year, month - 1, 1);
+    while (d.getMonth() === month - 1) {
+      days.push(new Date(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return days;
+  };
+
+  const isHoliday = (date) => holidays.some(h => h.holiday_date === date.toISOString().slice(0, 10));
+
+  const toggleHoliday = async (date) => {
+    const dateStr = date.toISOString().slice(0, 10);
+    const existing = holidays.find(h => h.holiday_date === dateStr);
+    if (existing) {
+      await apiFetch(`/holidays/${existing.id}`, { method: 'DELETE' });
+    } else {
+      await apiFetch('/holidays', { method: 'POST', body: JSON.stringify({ holiday_date: dateStr }) });
+    }
+    load();
+  };
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Holiday List</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select value={year} onChange={e => setYear(+e.target.value)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 13 }}>
+            {[2024,2025,2026,2027].map(y => <option key={y} value={y}>Year {y}</option>)}
+          </select>
+          <select value={month} onChange={e => setMonth(+e.target.value)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 13 }}>
+            {MONTHS.map((m, i) => <option key={i} value={i+1}>Month {m}</option>)}
+          </select>
+        </div>
+      </div>
+      <Card>
+        <h3 style={{ margin: '0 0 16px' }}>Days in {MONTHS[month-1]} {year}</h3>
+        {loading ? <p>Loading…</p> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            {DAYS_SHORT.map(d => <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: C.muted, padding: 6 }}>{d}</div>)}
+            {Array.from({ length: new Date(year, month-1, 1).getDay() }).map((_, i) => <div key={`e${i}`} />)}
+            {getDays().map(date => {
+              const holiday = isHoliday(date);
+              const dayName = DAYS_SHORT[date.getDay()];
+              return (
+                <div key={date.toISOString()} onClick={() => toggleHoliday(date)}
+                  style={{
+                    textAlign: 'center', padding: '8px 4px', borderRadius: 6, cursor: 'pointer', fontSize: 13,
+                    background: holiday ? C.red : C.blueLight,
+                    color: holiday ? '#fff' : C.text, fontWeight: holiday ? 700 : 400,
+                    border: `1px solid ${holiday ? C.red : C.border}`,
+                    transition: 'all .15s'
+                  }}>
+                  {date.getDate()}<br /><span style={{ fontSize: 10 }}>{dayName}</span>
+                </div>
+              );
+            })}
           </div>
         )}
+        <p style={{ color: C.muted, fontSize: 12, marginTop: 12 }}>Click a day to mark/unmark as holiday (shown in red)</p>
+      </Card>
+    </div>
+  );
+}
 
-        {/* ── TRIPS ── */}
-        {tab === 'trips' && !editTrip && (
-          <div>
-            <p style={sectSt}>{trips.length} trips total</p>
-            {loading && <Spinner />}
-            {trips.map(t => {
-              const driver = driverUsers.find(d => d.id === t.driver_id);
+// ── Shuttle Pass ──────────────────────────────────────────────────────────────
+function ShuttlePassPage() {
+  const { items, loading, create, update, remove } = useCrud('/shuttle/passes');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Shuttle Pass</h2>
+        <Btn onClick={() => { setForm({ status: 'active', validity_days: 30, fare_discount: 0 }); setModal('add'); }}>+ Create New Pass</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'Pass ID' },
+              { key: 'name', label: 'Pass Name' },
+              { key: 'pass_type', label: 'Pass Type' },
+              { key: 'morning_evening_fare', label: 'Morning/Evening Ride Fare' },
+              { key: 'fare_discount', label: 'Discount %' },
+              { key: 'validity_days', label: 'Validity (days)' },
+              { key: 'per_user_cancellation_limit', label: 'Per User Cancel Limit' },
+              { key: 'total_pass_limit', label: 'Total Pass Limit' },
+              { key: 'per_user_pass_limit', label: 'Per User Pass Limit' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+              { key: 'recommended', label: 'Recommended', render: r => r.recommended ? <Badge label="Yes" color={C.green} /> : 'No' },
+            ]}
+            data={items}
+            onEdit={r => { setForm(r); setModal('edit'); }}
+            onDelete={r => { if (window.confirm('Delete pass?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Create Pass' : 'Edit Pass'} onClose={() => setModal(null)}>
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <Input label="Pass Name *" {...f('name')} />
+          <Select label="Pass Type" {...f('pass_type')} options={[{ value: '', label: 'Select' }, { value: 'morning', label: 'Morning' }, { value: 'evening', label: 'Evening' }, { value: 'both', label: 'Morning & Evening' }]} />
+          <Input label="Fare Discount (%)" {...f('fare_discount')} type="number" />
+          <Input label="Validity (days)" {...f('validity_days')} type="number" />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Total Pass Limit" {...f('total_pass_limit')} type="number" />
+            <Input label="Per User Pass Limit" {...f('per_user_pass_limit')} type="number" />
+          </div>
+          <Input label="Per User Cancellation Limit" {...f('per_user_cancellation_limit')} type="number" />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
+            <input type="checkbox" checked={!!form.recommended} onChange={e => setForm(p => ({ ...p, recommended: e.target.checked ? 1 : 0 }))} />
+            Recommended
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Riders (Customers) ─────────────────────────────────────────────────────────
+function RidersPage() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/users').then(data => setUsers(data.filter(u => u.role === 'passenger'))).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const exportCSV = () => {
+    if (!users.length) return;
+    const keys = ['id', 'name', 'phone', 'account_status', 'created_at'];
+    const csv = [keys.join(','), ...users.map(r => keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = 'customers.csv'; a.click();
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Customer</h2>
+        <Btn small variant="outline" onClick={exportCSV}>Export CSV</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'Customer ID' },
+              { key: 'name', label: 'Name' },
+              { key: 'phone', label: 'Phone' },
+              { key: 'account_status', label: 'Status', render: r => statusBadge(r.account_status) },
+              { key: 'created_at', label: 'Registered', render: r => r.created_at?.slice(0, 10) },
+            ]}
+            data={users}
+          />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── Drivers Page ──────────────────────────────────────────────────────────────
+function DriversPage() {
+  const [drivers, setDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/users/drivers/all').then(setDrivers).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const approve = async (id) => {
+    await apiFetch(`/users/${id}/approve`, { method: 'POST' });
+    setDrivers(prev => prev.map(d => d.id === id ? { ...d, account_status: 'active' } : d));
+  };
+  const reject = async (id) => {
+    const note = window.prompt('Rejection reason:');
+    if (note === null) return;
+    await apiFetch(`/users/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) });
+    setDrivers(prev => prev.map(d => d.id === id ? { ...d, account_status: 'rejected' } : d));
+  };
+
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 16px' }}>Driver</h2>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'name', label: 'Name' },
+              { key: 'phone', label: 'Phone' },
+              { key: 'car', label: 'Car' },
+              { key: 'plate', label: 'Plate' },
+              { key: 'account_status', label: 'Status', render: r => statusBadge(r.account_status) },
+              { key: 'avg_rating', label: 'Rating', render: r => Number(r.avg_rating).toFixed(1) },
+              { key: 'total_trips', label: 'Trips' },
+            ]}
+            data={drivers}
+            extraActions={r => r.account_status === 'pending_review' && <>
+              <Btn small variant="ghost" onClick={() => approve(r.id)}>Approve</Btn>
+              <Btn small variant="danger" onClick={() => reject(r.id)}>Reject</Btn>
+            </>}
+          />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── Driver Documents ──────────────────────────────────────────────────────────
+function DriverDocumentsPage() {
+  const { items, loading, create, update, remove } = useCrud('/driver-doc-types');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Driver Documents</h2>
+        <Btn onClick={() => { setForm({ status: 'active', num_images: 1, doc_required: 1, gallery_restricted: 0, doc_number_required: 0, expiry_required: 0, expired_action: 'none' }); setModal('add'); }}>+ Add Document</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'Document ID' },
+              { key: 'doc_name', label: 'Document Name' },
+              { key: 'doc_type', label: 'Document Category' },
+              { key: 'num_images', label: 'Number of Images' },
+              { key: 'gallery_restricted', label: 'Gallery Restricted', render: r => r.gallery_restricted ? 'Yes' : 'No' },
+              { key: 'doc_required', label: 'Document Required', render: r => r.doc_required ? 'Yes' : 'No' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={items}
+            onEdit={r => { setForm(r); setModal('edit'); }}
+            onDelete={r => { if (window.confirm('Delete document type?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Driver Document' : 'Edit Driver Document'} onClose={() => setModal(null)}>
+          <Input label="Document Name *" {...f('doc_name')} />
+          <Select label="Document Type" {...f('doc_type')} options={[{ value: 'image', label: 'Image' }, { value: 'pdf', label: 'PDF' }, { value: 'both', label: 'Both' }]} />
+          <Input label="Number of Images" {...f('num_images')} type="number" />
+          <Select label="Expired Action" {...f('expired_action')} options={[{ value: 'none', label: 'None' }, { value: 'block', label: 'Block' }, { value: 'notify', label: 'Notify' }]} />
+          {[['gallery_restricted', 'Gallery Restricted'], ['doc_required', 'Document Required'], ['doc_number_required', 'Document Number Required'], ['expiry_required', 'Document Expiry Date Required']].map(([k, label]) => (
+            <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 10 }}>
+              <input type="checkbox" checked={!!form[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.checked ? 1 : 0 }))} />
+              {label}
+            </label>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Delete Account Requests ───────────────────────────────────────────────────
+function DeleteRequestsPage() {
+  const { items, loading, load } = useCrud('/delete-requests');
+
+  const approve = async (id) => {
+    if (!window.confirm('Approve and delete this user account?')) return;
+    await apiFetch(`/delete-requests/${id}/approve`, { method: 'PUT' });
+    load();
+  };
+  const reject = async (id) => {
+    await apiFetch(`/delete-requests/${id}/reject`, { method: 'PUT' });
+    load();
+  };
+
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 16px' }}>Delete Account Request</h2>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'user_name', label: 'User Name' },
+              { key: 'user_role', label: 'User' },
+              { key: 'reason', label: 'Reason' },
+              { key: 'feedback', label: 'Feedback' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={items}
+            extraActions={r => r.status === 'pending' && <>
+              <Btn small variant="ghost" onClick={() => approve(r.id)}>Approve</Btn>
+              <Btn small variant="danger" onClick={() => reject(r.id)}>Reject</Btn>
+            </>}
+          />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── Push Notifications ────────────────────────────────────────────────────────
+function PushesPage() {
+  const { items, loading, create, remove } = useCrud('/pushes');
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ user_type: 'all', title: '', message: '' });
+
+  const send = async () => {
+    await create(form);
+    setModal(false);
+    setForm({ user_type: 'all', title: '', message: '' });
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Pushes</h2>
+        <Btn onClick={() => setModal(true)}>Create Push</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'title', label: 'Title' },
+              { key: 'message', label: 'Message' },
+              { key: 'user_type', label: 'Sent To' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+              { key: 'created_at', label: 'Date', render: r => r.created_at?.slice(0, 16) },
+            ]}
+            data={items}
+            onDelete={r => { if (window.confirm('Delete push?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title="Send Push Notification" onClose={() => setModal(false)}>
+          <Input label="Notification Title *" {...f('title')} />
+          <Input label="Notification Message *" {...f('message')} />
+          <Select label="Send Push To" {...f('user_type')} options={[{ value: 'all', label: 'All Users' }, { value: 'customer', label: 'Customers' }, { value: 'driver', label: 'Drivers' }]} />
+          <Input label="Image URL (Optional)" {...f('image_url')} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={send}>Send Push</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── General Settings ──────────────────────────────────────────────────────────
+function GeneralSettingsPage() {
+  const [form, setForm] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    apiFetch('/admin/settings/general').then(setForm).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    await apiFetch('/admin/settings/general', { method: 'PUT', body: JSON.stringify(form) });
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 20px' }}>General Settings</h2>
+      {loading ? <p>Loading…</p> : (
+        <Card style={{ maxWidth: 600 }}>
+          <h4 style={{ margin: '0 0 16px', fontSize: 15 }}>Client Settings</h4>
+          <Input label="Client Name *" {...f('client_name')} />
+          <Input label="Support Email *" {...f('support_email')} type="email" />
+          <Input label="Brand Logo URL" {...f('brand_logo_url')} />
+          <Input label="Favicon URL" {...f('favicon_url')} />
+          <Btn onClick={save} style={{ marginBottom: 24 }}>Update</Btn>
+          {saved && <span style={{ color: C.green, marginLeft: 10, fontSize: 13 }}>Saved!</span>}
+
+          <h4 style={{ margin: '0 0 16px', fontSize: 15, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>Feature Settings</h4>
+          <Input label="Number of Nearby Stops to Show" {...f('nearby_stops_count')} type="number" />
+          <Input label="Maximum Distance for Nearby Stops (meters)" {...f('max_nearby_distance')} type="number" />
+          <Btn onClick={save}>Update</Btn>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── City Settings ─────────────────────────────────────────────────────────────
+function CitySettingsPage() {
+  const [form, setForm] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saved, setSaved] = useState(false);
+  const CITY_ID = 1;
+
+  useEffect(() => {
+    apiFetch(`/admin/settings/city/${CITY_ID}`).then(setForm).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    await apiFetch(`/admin/settings/city/${CITY_ID}`, { method: 'PUT', body: JSON.stringify(form) });
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 20px' }}>City Settings</h2>
+      {loading ? <p>Loading…</p> : (
+        <Card style={{ maxWidth: 600 }}>
+          <Input label="Customer Support Number *" {...f('customer_support_number')} />
+          <Input label="Driver Support Number *" {...f('driver_support_number')} />
+          <Input label="Emergency Number *" {...f('emergency_number')} />
+          <Select label="Service Type *" {...f('service_type')} options={[
+            { value: 'both', label: 'On-Demand and Scheduled' },
+            { value: 'on_demand', label: 'On-Demand Only' },
+            { value: 'scheduled', label: 'Scheduled Only' },
+          ]} />
+          <Btn onClick={save}>Update</Btn>
+          {saved && <span style={{ color: C.green, marginLeft: 10, fontSize: 13 }}>Saved!</span>}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── Manager Settings ──────────────────────────────────────────────────────────
+function ManagerSettingsPage() {
+  const { items, loading, create, update, remove, load } = useCrud('/managers');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const { items: roles } = useCrud('/roles');
+
+  const save = async () => {
+    if (modal === 'add') await create(form); else await update(form.id, form);
+    setModal(null);
+  };
+  const resetPwd = async (id) => {
+    const password = window.prompt('New password:');
+    if (!password) return;
+    await apiFetch(`/managers/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) });
+    window.alert('Password reset successfully');
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Manager Settings</h2>
+        <Btn onClick={() => { setForm({ status: 'active' }); setModal('add'); }}>+ Add Manager</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'name', label: 'Name' },
+              { key: 'email', label: 'Email' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+              { key: 'role_name', label: 'Role' },
+            ]}
+            data={items}
+            onEdit={r => { setForm(r); setModal('edit'); }}
+            onDelete={r => { if (window.confirm('Delete manager?')) remove(r.id); }}
+            extraActions={r => <Btn small variant="outline" onClick={() => resetPwd(r.id)}>Reset Password</Btn>}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Manager' : 'Edit Manager'} onClose={() => setModal(null)}>
+          <Input label="Admin Name *" {...f('name')} />
+          <Input label="Email *" {...f('email')} type="email" />
+          {modal === 'add' && <>
+            <Input label="Password *" {...f('password')} type="password" />
+            <Input label="Confirm Password *" {...f('confirm_password')} type="password" />
+          </>}
+          <Select label="Role *" {...f('role_id')} options={[{ value: '', label: 'Select Role' }, ...roles.map(r => ({ value: r.id, label: r.name }))]} />
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Roles & Permissions ───────────────────────────────────────────────────────
+function RolesPage() {
+  const { items, loading, create, update, remove } = useCrud('/roles');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [selectedPerms, setSelectedPerms] = useState([]);
+
+  const ALL_TABS = ['Customer', 'Vehicle Type', 'Driver Documents', 'Dynamic HomeScreen', 'Manager Settings', 'Geofence', 'General Settings', 'City Settings', 'Map View', 'Dashboard', 'Shuttle Stops', 'Shuttle Routes', 'Shuttle Vehicles', 'Shuttle Fare', 'Shuttle Trips', 'Shuttle Analytics', 'Shuttle Cancellation', 'Operational Cities', 'Pushes', 'Shuttle Cancellation Reason', 'Driver', 'Roles and Permissions', 'Delete Account'];
+
+  const openAdd = () => { setForm({}); setSelectedPerms([]); setModal('add'); };
+  const openEdit = (r) => { setForm(r); setSelectedPerms(r.permissions || []); setModal('edit'); };
+  const save = async () => {
+    const body = { ...form, permissions: selectedPerms };
+    if (modal === 'add') await create(body); else await update(form.id, body);
+    setModal(null);
+  };
+  const togglePerm = (p) => setSelectedPerms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Roles & Permissions</h2>
+        <Btn onClick={openAdd}>+ Add Role</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[{ key: 'id', label: 'ID' }, { key: 'name', label: 'Role Name' }, { key: 'permissions', label: 'Permissions', render: r => <span style={{ fontSize: 12, color: C.muted }}>{(r.permissions || []).join(', ') || 'None'}</span> }]}
+            data={items}
+            onEdit={openEdit}
+            onDelete={r => { if (window.confirm('Delete role?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Role' : 'Edit Role'} onClose={() => setModal(null)}>
+          <Input label="Role Name *" value={form.name || ''} onChange={v => setForm(p => ({ ...p, name: v }))} />
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 8 }}>Select Tabs *</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {ALL_TABS.map(t => (
+                <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer', padding: '4px 8px', borderRadius: 5, background: selectedPerms.includes(t) ? C.blueLight : '#f5f5f5' }}>
+                  <input type="checkbox" checked={selectedPerms.includes(t)} onChange={() => togglePerm(t)} />
+                  {t}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Operational Cities ────────────────────────────────────────────────────────
+function OperationalCitiesPage() {
+  const { items, loading, create, update, remove } = useCrud('/cities');
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [mapPins, setMapPins] = useState([]);
+
+  const save = async () => {
+    const fd = { ...form };
+    if (mapPins.length > 0) { fd.lat = mapPins[0].lat; fd.lng = mapPins[0].lng; }
+    if (modal === 'add') await create(fd); else await update(fd.id, fd);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  const openAdd = () => { setMapPins([]); setForm({ status: 'active' }); setModal('add'); };
+  const openEdit = (r) => {
+    const pins = [];
+    const lat = parseFloat(r.lat); const lng = parseFloat(r.lng);
+    if (!isNaN(lat) && !isNaN(lng)) pins.push({ type: 'pickup', lat: r.lat, lng: r.lng, label: r.name || '' });
+    setMapPins(pins);
+    setForm(r);
+    setModal('edit');
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Operational Cities</h2>
+        <Btn onClick={openAdd}>+ Add City</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'name', label: 'City Name' },
+              { key: 'country', label: 'Country' },
+              { key: 'lat', label: 'Lat', render: r => r.lat ? parseFloat(r.lat).toFixed(3) : '—' },
+              { key: 'lng', label: 'Lng', render: r => r.lng ? parseFloat(r.lng).toFixed(3) : '—' },
+              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
+            ]}
+            data={items}
+            onEdit={openEdit}
+            onDelete={r => { if (window.confirm('Delete city?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Operational City' : 'Edit City'} onClose={() => setModal(null)}>
+          <Input label="City Name *" {...f('name')} />
+          <Input label="Country" {...f('country')} />
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#222' }}>
+              🗺️ Pick City Center on Map
+              <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 400, marginLeft: 6 }}>(click to place center pin)</span>
+            </label>
+            <StopPicker
+              stops={mapPins}
+              onChange={pins => {
+                setMapPins(pins.slice(-1));
+                if (pins.length > 0) setForm(p => ({ ...p, lat: pins[pins.length-1].lat, lng: pins[pins.length-1].lng }));
+              }}
+              height={220}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Input label="Latitude" {...f('lat')} type="number" />
+            <Input label="Longitude" {...f('lng')} type="number" />
+          </div>
+          <Input label="Geofence Radius (m)" {...f('geofence_radius')} type="number" />
+          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── HomeScreen Settings ───────────────────────────────────────────────────────
+function HomeScreenPage() {
+  const CITY_ID = 1;
+  const { items, loading, create, update, remove } = useCrud(`/admin/settings/homescreen/${CITY_ID}`);
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  const CATEGORIES = ['Promotions', 'Refer & Earn', 'Verify Documents', "What's New", 'Why Mobility', 'Video'];
+
+  const save = async () => {
+    const body = { ...form, city_id: CITY_ID };
+    if (modal === 'add') await create(body); else await update(form.id, body);
+    setModal(null);
+  };
+  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>HomeScreen Settings</h2>
+        <Btn onClick={() => { setForm({ active: 1, user_type: 'customer', display_order: 1 }); setModal('add'); }}>+ Add</Btn>
+      </div>
+      {loading ? <p>Loading…</p> : (
+        <Card>
+          <Table
+            columns={[
+              { key: 'category', label: 'Category' },
+              { key: 'display_order', label: 'Display Order' },
+              { key: 'active', label: 'Active', render: r => r.active ? <Badge label="Yes" color={C.green} /> : 'No' },
+              { key: 'user_type', label: 'User Type' },
+              { key: 'geofence_name', label: 'Geofence Name' },
+            ]}
+            data={items}
+            onEdit={r => { setForm(r); setModal('edit'); }}
+            onDelete={r => { if (window.confirm('Delete item?')) remove(r.id); }}
+          />
+        </Card>
+      )}
+      {modal && (
+        <Modal title={modal === 'add' ? 'Add Data' : 'Edit Data'} onClose={() => setModal(null)}>
+          <Select label="Category" {...f('category')} options={CATEGORIES.map(c => ({ value: c, label: c }))} />
+          <Input label="Display Order" {...f('display_order')} type="number" />
+          <Select label="User Type" {...f('user_type')} options={[{ value: 'customer', label: 'Customer' }, { value: 'driver', label: 'Driver' }, { value: 'both', label: 'Both' }]} />
+          <Input label="Geofence Name" {...f('geofence_name')} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
+            <input type="checkbox" checked={!!form.active} onChange={e => setForm(p => ({ ...p, active: e.target.checked ? 1 : 0 }))} />
+            Active
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SIDEBAR NAVIGATION
+// ══════════════════════════════════════════════════════════════════════════════
+const NAV = [
+  { id: 'dashboard', label: 'Dashboard', icon: '📊', section: null },
+  { section: 'Shuttle' },
+  { id: 'stops', label: 'Stops', icon: '📍' },
+  { id: 'routes', label: 'Routes', icon: '🛤️' },
+  { id: 'vehicles', label: 'Vehicles', icon: '🚐' },
+  { id: 'fares', label: 'Fare', icon: '💰' },
+  { id: 'trips', label: 'Trips', icon: '🗓️' },
+  { id: 'analytics', label: 'Analytics', icon: '📈' },
+  { id: 'cancellation', label: 'Cancellation', icon: '❌' },
+  { id: 'cancellation-reasons', label: 'Cancellation Reasons', icon: '📋' },
+  { id: 'promotions', label: 'Promotions', icon: '🎁' },
+  { id: 'suggested-routes', label: 'Suggested Routes', icon: '🗺️' },
+  { id: 'holiday', label: 'Holiday', icon: '🏖️' },
+  { id: 'shuttle-pass', label: 'Shuttle Pass', icon: '🎫' },
+  { section: 'Users' },
+  { id: 'customers', label: 'Customer', icon: '👤' },
+  { id: 'drivers', label: 'Driver', icon: '🚗' },
+  { id: 'delete-requests', label: 'Delete Account Request', icon: '🗑️' },
+  { id: 'driver-documents', label: 'Driver Documents', icon: '📄' },
+  { id: 'vehicle-types', label: 'Vehicle Type', icon: '🚌' },
+  { section: 'Settings' },
+  { id: 'homescreen', label: 'HomeScreen', icon: '📱' },
+  { id: 'pushes', label: 'Pushes', icon: '🔔' },
+  { id: 'general-settings', label: 'General Settings', icon: '⚙️' },
+  { id: 'city-settings', label: 'City Settings', icon: '🏙️' },
+  { id: 'manager-settings', label: 'Manager Settings', icon: '👔' },
+  { id: 'roles', label: 'Roles and Permissions', icon: '🔑' },
+  { id: 'operational-cities', label: 'Operational Cities', icon: '🌍' },
+];
+
+const PAGE_MAP = {
+  dashboard: DashboardPage,
+  stops: StopsPage,
+  routes: RoutesPage,
+  vehicles: VehiclesPage,
+  fares: FaresPage,
+  trips: TripsPage,
+  analytics: BookingsAnalyticsPage,
+  cancellation: CancellationPage,
+  'cancellation-reasons': CancellationReasonsPage,
+  promotions: PromotionsPage,
+  'suggested-routes': SuggestedRoutesPage,
+  holiday: HolidayPage,
+  'shuttle-pass': ShuttlePassPage,
+  customers: RidersPage,
+  drivers: DriversPage,
+  'delete-requests': DeleteRequestsPage,
+  'driver-documents': DriverDocumentsPage,
+  'vehicle-types': VehicleTypesPage,
+  homescreen: HomeScreenPage,
+  pushes: PushesPage,
+  'general-settings': GeneralSettingsPage,
+  'city-settings': CitySettingsPage,
+  'manager-settings': ManagerSettingsPage,
+  roles: RolesPage,
+  'operational-cities': OperationalCitiesPage,
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAIN ADMIN DASHBOARD
+// ══════════════════════════════════════════════════════════════════════════════
+export default function AdminDash() {
+  const { user, logout } = useAuth();
+  const [page, setPage] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const PageComponent = PAGE_MAP[page] || DashboardPage;
+
+  return (
+    <div style={{ fontFamily: 'Poppins, sans-serif', background: C.bg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Top AppBar */}
+      <div style={{
+        background: C.white, borderBottom: `1px solid ${C.border}`,
+        height: 66, display: 'flex', alignItems: 'center', padding: '0 20px',
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
+        justifyContent: 'space-between'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => setSidebarOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: C.text }}>☰</button>
+          <span style={{ fontWeight: 700, fontSize: 18, color: C.blue }}>Admin Panel</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span style={{ fontSize: 14, color: C.muted }}>Welcome, {user?.name}</span>
+          <Btn small variant="outline" onClick={logout}>Logout</Btn>
+        </div>
+      </div>
+
+      {/* Layout */}
+      <div style={{ display: 'flex', marginTop: 66 }}>
+        {/* Sidebar */}
+        {sidebarOpen && (
+          <div style={{
+            width: 260, background: C.sidebar, borderRight: `1px solid ${C.border}`,
+            position: 'fixed', top: 66, bottom: 0, left: 0, overflowY: 'auto',
+            zIndex: 999, padding: '12px 0',
+          }}>
+            {NAV.map((item, i) => {
+              if (item.section) return (
+                <div key={i} style={{ padding: '10px 20px 4px', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>{item.section}</div>
+              );
+              const active = page === item.id;
               return (
-                <div key={t.id} style={{ ...card, marginBottom:12 }}>
-                  <div style={{ display:'flex', alignItems:'center', marginBottom:8 }}>
-                    <Badge type={t.status==='completed'?'blue':t.status==='active'?'green':t.status==='cancelled'?'red':'amber'}>{t.status}</Badge>
-                    <span style={{ marginLeft:'auto', fontSize:11, color:C.text3 }}>{fmtDate(t.date)} · {t.pickup_time}</span>
-                  </div>
-                  <div style={{ fontSize:16, fontWeight:400, marginBottom:4 }}>{t.from_loc} → {t.to_loc}</div>
-                  <div style={{ fontSize:12, color:C.text2, marginBottom:6 }}>
-                    Driver: {t.driver_name||driver?.name||'—'} · {t.driver_plate||driver?.plate||'—'} · {t.price} EGP/seat
-                  </div>
-                  <CapBarLabeled booked={t.booked_seats||0} total={t.total_seats} />
-                  {t.status !== 'cancelled' && t.status !== 'completed' && (
-                    <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
-                      <button onClick={() => { setEditTrip({...t}); setEditStops(t.stops||[]); }} style={btnSm}>Edit</button>
-                      {!['tendered','awarded','assigned'].includes(t.status) && (
-                        <button
-                          onClick={() => openTenderModal(t.id, t.from_loc, t.to_loc)}
-                          style={{ background:'rgba(251,191,36,0.1)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.28)', borderRadius:8, padding:'7px 14px', fontFamily:"'Sora',sans-serif", fontSize:12, cursor:'pointer', fontWeight:600 }}
-                        >
-                          🏷 Offer for tender
-                        </button>
-                      )}
-                      {['tendered'].includes(t.status) && (
-                        <span style={{ fontSize:11, color:'#fbbf24', background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.2)', borderRadius:6, padding:'4px 10px', display:'flex', alignItems:'center', gap:4 }}>⚡ Bidding open</span>
-                      )}
-                      {['awarded','assigned'].includes(t.status) && (
-                        <span style={{ fontSize:11, color:'#34d399', background:'rgba(52,211,153,0.08)', border:'1px solid rgba(52,211,153,0.2)', borderRadius:6, padding:'4px 10px', display:'flex', alignItems:'center', gap:4 }}>🏆 Tender awarded</span>
-                      )}
-                      <button onClick={() => handleCancel(t.id)} style={btnDanger}>Cancel trip</button>
-                      <button onClick={() => handleDeletePermanent(t.id)} style={{ ...btnDanger, background:'rgba(239,68,68,0.18)', border:'1px solid rgba(239,68,68,0.4)' }}>🗑 Delete from DB</button>
-                    </div>
-                  )}
+                <div key={item.id} onClick={() => setPage(item.id)} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 20px',
+                  cursor: 'pointer', fontSize: 13, fontWeight: active ? 700 : 400,
+                  background: active ? C.blueLight : 'transparent',
+                  color: active ? C.blue : C.text,
+                  borderLeft: active ? `3px solid ${C.blue}` : '3px solid transparent',
+                  transition: 'all .15s',
+                }}>
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* ── EDIT TRIP ── */}
-        {tab === 'trips' && editTrip && (
-          <div>
-            <button onClick={() => { setEditTrip(null); setEditStops([]); setEditMapCenter(null); }} style={{ ...btnSm, marginBottom:20 }}>← Cancel</button>
-            <div style={card}>
-              <p style={sectSt}>Edit trip #{editTrip.id}</p>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                <AreaSearch label="📍 Pickup area"   icon="📍" value={editTrip.from_loc?{name:editTrip.from_loc}:null} onChange={c=>{ setEditTrip({...editTrip,from_loc:c?c.name:''}); if(c?.lat) setEditMapCenter({lat:c.lat,lng:c.lng,name:c.name}); }} />
-                <AreaSearch label="🏁 Drop-off area" icon="🏁" value={editTrip.to_loc?{name:editTrip.to_loc}:null}   onChange={c=>{ setEditTrip({...editTrip,to_loc:c?c.name:''}); if(c?.lat) setEditMapCenter({lat:c.lat,lng:c.lng,name:c.name}); }} />
-                <Inp label="Date"          type="date"   value={editTrip.date?.slice(0,10)}  onChange={e=>setEditTrip({...editTrip,date:e.target.value})} />
-                <Inp label="Pickup time"   type="time"   value={editTrip.pickup_time}        onChange={e=>setEditTrip({...editTrip,pickup_time:e.target.value})} />
-                <Inp label="Drop-off time" type="time"   value={editTrip.dropoff_time||''}   onChange={e=>setEditTrip({...editTrip,dropoff_time:e.target.value})} />
-                <Inp label="Price (EGP)"   type="number" value={editTrip.price}              onChange={e=>setEditTrip({...editTrip,price:e.target.value})} />
-              </div>
-              <Sel label="Assign driver" value={editTrip.driver_id} onChange={e=>setEditTrip({...editTrip,driver_id:e.target.value})}>
-                {driverUsers.map(d => <option key={d.id} value={d.id}>{d.name} — {d.plate}</option>)}
-              </Sel>
-              <p style={{ ...sectSt, marginTop:16 }}>🗺️ Edit stops</p>
-              <StopPicker stops={editStops} onChange={setEditStops} height={300} centerOn={editMapCenter} />
-              <button onClick={handleSaveEdit} style={btnPrimary}>Save changes</button>
-            </div>
-          </div>
-        )}
-
-        {/* ── DRIVERS TAB ── */}
-        {tab === 'drivers' && !viewDriver && (
-          <div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-              <p style={{ ...sectSt, margin:0 }}>{allDrivers.length} total drivers</p>
-              <div style={{ display:'flex', gap:8, fontSize:12, color:C.text3 }}>
-                <span>🟢 {allDrivers.filter(d=>d.account_status==='active').length} active</span>
-                <span>🟡 {allDrivers.filter(d=>d.account_status==='pending_review').length} pending</span>
-                <span>🔴 {allDrivers.filter(d=>d.account_status==='rejected').length} rejected</span>
-              </div>
-            </div>
-            {allDrivers.length === 0 && <Spinner />}
-            {allDrivers.map(d => (
-              <div key={d.id} style={{ ...card, marginBottom:12, cursor:'pointer', transition:'border-color .15s', borderColor: d.account_status==='pending_review'?'rgba(251,191,36,0.25)': d.account_status==='rejected'?'rgba(248,113,113,0.2)':C.border }}
-                onClick={() => setViewDriver(d)}>
-                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  {/* Profile photo or avatar */}
-                  {d.profile_photo ? (
-                    <img src={d.profile_photo} alt={d.name}
-                      style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:`2px solid ${d.account_status==='active'?'#4ade80':d.account_status==='pending_review'?'#fbbf24':'#f87171'}`, flexShrink:0 }} />
-                  ) : (
-                    <Avatar name={d.name} size={48}
-                      color={d.account_status==='active'?C.green:d.account_status==='pending_review'?C.amber:C.red}
-                      dim={d.account_status==='active'?C.greenDim:d.account_status==='pending_review'?C.amberDim:C.redDim}
-                      border={d.account_status==='active'?C.greenBorder:d.account_status==='pending_review'?C.amberBorder:C.redBorder} />
-                  )}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:600, fontSize:14 }}>{d.name}</div>
-                    <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>
-                      {d.car} · <span style={{ fontFamily:'monospace' }}>{d.plate}</span>
-                    </div>
-                    <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>
-                      {d.phone} · Joined {fmtDate(d.created_at)}
-                    </div>
-                  </div>
-                  <div style={{ textAlign:'right', flexShrink:0 }}>
-                    {statusBadge(d.account_status)}
-                    <div style={{ fontSize:12, color:C.amber, marginTop:6 }}>
-                      ★ {parseFloat(d.avg_rating||0).toFixed(1)} <span style={{ color:C.text3 }}>({d.rating_count||0})</span>
-                    </div>
-                    <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>
-                      {d.completed_trips||0} trips done
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginTop:10, fontSize:11, color:C.text3 }}>
-                  {d.car_license_photo ? '✅ Docs uploaded' : '⚠ No docs'} · Tap to view full profile →
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── DRIVER PROFILE VIEW ── */}
-        {tab === 'drivers' && viewDriver && (
-          <div>
-            <button onClick={() => setViewDriver(null)} style={{ ...btnSm, marginBottom:20 }}>← Back to drivers</button>
-            <div style={{ ...card, marginBottom:16 }}>
-              {/* Header */}
-              <div style={{ display:'flex', alignItems:'flex-start', gap:16, marginBottom:20 }}>
-                {viewDriver.profile_photo ? (
-                  <div style={{ cursor:'pointer', flexShrink:0 }} onClick={() => setLightbox({ src:viewDriver.profile_photo, label:'Profile Photo' })}>
-                    <img src={viewDriver.profile_photo} alt={viewDriver.name}
-                      style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:`3px solid ${viewDriver.account_status==='active'?'#4ade80':'#fbbf24'}` }} />
-                    <div style={{ textAlign:'center', fontSize:10, color:C.text3, marginTop:4 }}>View photo</div>
-                  </div>
-                ) : (
-                  <Avatar name={viewDriver.name} size={80} />
-                )}
-                <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
-                    <h2 style={{ fontSize:20, fontWeight:700, margin:0 }}>{viewDriver.name}</h2>
-                    {statusBadge(viewDriver.account_status)}
-                  </div>
-                  <div style={{ fontSize:13, color:C.text2, marginBottom:4 }}>{viewDriver.phone}</div>
-                  <div style={{ fontSize:13, color:C.text2, marginBottom:4 }}>
-                    {viewDriver.car} · <span style={{ fontFamily:'monospace', color:C.text }}>{viewDriver.plate}</span>
-                  </div>
-                  <div style={{ fontSize:12, color:C.text3 }}>Joined {fmtDate(viewDriver.created_at)}</div>
-                  {viewDriver.rejection_note && (
-                    <div style={{ marginTop:10, background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#f87171' }}>
-                      <b>Rejection reason:</b> {viewDriver.rejection_note}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20, borderTop:`1px solid ${C.border}`, paddingTop:16 }}>
-                <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:22, fontWeight:300, color:C.blue }}>{viewDriver.total_trips||0}</div>
-                  <div style={{ fontSize:10, color:C.text3, textTransform:'uppercase', letterSpacing:'.06em' }}>Total trips</div>
-                </div>
-                <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:22, fontWeight:300, color:C.green }}>{viewDriver.completed_trips||0}</div>
-                  <div style={{ fontSize:10, color:C.text3, textTransform:'uppercase', letterSpacing:'.06em' }}>Completed</div>
-                </div>
-                <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:22, fontWeight:300, color:C.amber }}>★ {parseFloat(viewDriver.avg_rating||0).toFixed(1)}</div>
-                  <div style={{ fontSize:10, color:C.text3, textTransform:'uppercase', letterSpacing:'.06em' }}>Rating</div>
-                </div>
-                <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:22, fontWeight:300, color:C.text }}>{viewDriver.rating_count||0}</div>
-                  <div style={{ fontSize:10, color:C.text3, textTransform:'uppercase', letterSpacing:'.06em' }}>Reviews</div>
-                </div>
-              </div>
-
-              {/* Documents */}
-              <p style={sectSt}>Documents</p>
-              {viewDriver.submitted_at && (
-                <p style={{ fontSize:12, color:C.text3, marginBottom:12 }}>
-                  Submitted {fmtDate(viewDriver.submitted_at)}
-                  {viewDriver.reviewed_at ? ` · Reviewed ${fmtDate(viewDriver.reviewed_at)}` : ''}
-                </p>
-              )}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, marginBottom:20 }}>
-                <DocThumb label="🚗 Car License"     url={viewDriver.car_license_photo}     onView={(s,l)=>setLightbox({src:s,label:l})} />
-                <DocThumb label="🪪 Driver License"  url={viewDriver.driver_license_photo}  onView={(s,l)=>setLightbox({src:s,label:l})} />
-                <DocThumb label="📄 Criminal Record" url={viewDriver.criminal_record_photo} onView={(s,l)=>setLightbox({src:s,label:l})} />
-              </div>
-
-              {/* Actions for pending drivers only */}
-              {viewDriver.account_status === 'pending_review' && (
-                <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:16 }}>
-                  <p style={{ ...sectSt, marginBottom:12 }}>Review Actions</p>
-                  {rejectTarget === viewDriver.id ? (
-                    <div style={{ background:C.bg3, border:`1px solid ${C.redBorder}`, borderRadius:10, padding:16 }}>
-                      <p style={{ fontSize:13, color:C.red, marginBottom:10, fontWeight:600 }}>Reason for rejection (optional)</p>
-                      <textarea value={rejectNote} onChange={e=>setRejectNote(e.target.value)}
-                        placeholder="e.g. Blurry photo, expired license…"
-                        style={{ width:'100%', boxSizing:'border-box', background:C.bg4, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px', color:C.text, fontFamily:"'Sora',sans-serif", fontSize:13, resize:'none', height:72, outline:'none' }} />
-                      <div style={{ display:'flex', gap:8, marginTop:10 }}>
-                        <button onClick={()=>handleReject(viewDriver.id)} style={{ ...btnDanger, padding:'9px 22px' }}>Confirm Reject</button>
-                        <button onClick={()=>{setRejectTarget(null);setRejectNote('');}} style={btnSm}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display:'flex', gap:10 }}>
-                      <button onClick={()=>handleApprove(viewDriver.id)} style={{ ...btnPrimary, width:'auto', padding:'11px 32px' }}>✅ Approve Driver</button>
-                      <button onClick={()=>setRejectTarget(viewDriver.id)} style={{ ...btnDanger, padding:'11px 28px' }}>❌ Reject</button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── PASSENGERS ── */}
-        {tab === 'passengers' && (
-          <div>
-            <p style={sectSt}>{passengers.length} registered passengers</p>
-            {passengers.map(p => (
-              <div key={p.id} style={{ ...card, marginBottom:10 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  <Avatar name={p.name} color={C.blue} dim={C.blueDim} border={C.blueBorder} size={38} />
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:500, fontSize:14 }}>{p.name}</div>
-                    <div style={{ fontSize:12, color:C.text2 }}>{p.phone}</div>
-                  </div>
-                  <div style={{ textAlign:'right', fontSize:12, color:C.text3 }}>Joined {fmtDate(p.created_at)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── DRIVER REVIEW TAB ── */}
-        {tab === 'review' && (
-          <div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-              <p style={{ ...sectSt, margin:0 }}>
-                {pendingDrivers.length} driver{pendingDrivers.length!==1?'s':''} pending review
-              </p>
-              <button onClick={loadPendingDrivers} style={{ ...btnSm, fontSize:11 }}>↻ Refresh</button>
-            </div>
-
-            {reviewLoading && <Spinner />}
-
-            {!reviewLoading && pendingDrivers.length === 0 && (
-              <div style={{ ...card, textAlign:'center', padding:'48px 20px' }}>
-                <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
-                <div style={{ fontWeight:500, marginBottom:6 }}>No drivers pending review</div>
-                <p style={{ color:C.text3, fontSize:13 }}>All applications processed.</p>
-              </div>
-            )}
-
-            {!reviewLoading && pendingDrivers.map(driver => (
-              <div key={driver.id} style={{ ...card, marginBottom:16, border: expandedDriver===driver.id?`1px solid rgba(251,191,36,0.3)`:`1px solid ${C.border}` }}>
-
-                {/* Collapsed header */}
-                <div style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}
-                  onClick={() => setExpandedDriver(expandedDriver===driver.id?null:driver.id)}>
-                  {driver.profile_photo ? (
-                    <img src={driver.profile_photo} alt={driver.name}
-                      style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:'2px solid #fbbf24', flexShrink:0 }} />
-                  ) : (
-                    <Avatar name={driver.name} size={48} />
-                  )}
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, fontSize:15 }}>{driver.name}</div>
-                    <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>
-                      {driver.phone} · {driver.car} · <span style={{ fontFamily:'monospace' }}>{driver.plate}</span>
-                    </div>
-                    <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>
-                      Submitted {fmtDate(driver.submitted_at||driver.created_at)}
-                    </div>
-                  </div>
-                  <Badge type="amber">Pending</Badge>
-                  <span style={{ color:C.text3, fontSize:12, marginLeft:8 }}>{expandedDriver===driver.id?'▲':'▼'}</span>
-                </div>
-
-                {/* Expanded */}
-                {expandedDriver === driver.id && (
-                  <div style={{ marginTop:20, borderTop:`1px solid ${C.border}`, paddingTop:20 }}>
-
-                    {/* Profile photo large */}
-                    {driver.profile_photo && (
-                      <div style={{ marginBottom:20 }}>
-                        <p style={sectSt}>Profile Photo</p>
-                        <div style={{ display:'inline-block', cursor:'pointer' }}
-                          onClick={() => setLightbox({ src:driver.profile_photo, label:'Profile Photo' })}>
-                          <img src={driver.profile_photo} alt="Profile"
-                            style={{ height:100, width:100, borderRadius:'50%', objectFit:'cover', border:'2px solid #fbbf24' }} />
-                          <div style={{ textAlign:'center', fontSize:11, color:C.text3, marginTop:4 }}>Click to enlarge</div>
-                        </div>
-                      </div>
-                    )}
-
-                    <p style={sectSt}>Documents</p>
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
-                      <DocThumb label="🚗 Car License"     url={driver.car_license_photo}     onView={(s,l)=>setLightbox({src:s,label:l})} />
-                      <DocThumb label="🪪 Driver License"  url={driver.driver_license_photo}  onView={(s,l)=>setLightbox({src:s,label:l})} />
-                      <DocThumb label="📄 Criminal Record" url={driver.criminal_record_photo} onView={(s,l)=>setLightbox({src:s,label:l})} />
-                    </div>
-
-                    {/* Reject / Approve */}
-                    {rejectTarget === driver.id ? (
-                      <div style={{ background:C.bg3, border:`1px solid ${C.redBorder}`, borderRadius:10, padding:16 }}>
-                        <p style={{ fontSize:13, color:C.red, marginBottom:10, fontWeight:600 }}>Reason for rejection (optional)</p>
-                        <textarea value={rejectNote} onChange={e=>setRejectNote(e.target.value)}
-                          placeholder="e.g. Blurry photo, expired license…"
-                          style={{ width:'100%', boxSizing:'border-box', background:C.bg4, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px', color:C.text, fontFamily:"'Sora',sans-serif", fontSize:13, resize:'none', height:72, outline:'none' }} />
-                        <div style={{ display:'flex', gap:8, marginTop:10 }}>
-                          <button onClick={()=>handleReject(driver.id)} style={{ ...btnDanger, padding:'9px 22px' }}>Confirm Reject</button>
-                          <button onClick={()=>{setRejectTarget(null);setRejectNote('');}} style={btnSm}>Cancel</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display:'flex', gap:10 }}>
-                        <button onClick={()=>handleApprove(driver.id)} style={{ ...btnPrimary, width:'auto', padding:'11px 32px' }}>✅ Approve</button>
-                        <button onClick={()=>setRejectTarget(driver.id)} style={{ ...btnDanger, padding:'11px 28px' }}>❌ Reject</button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-      </div>
-
-      {/* ── TENDER MODAL ── */}
-      {tenderModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
-          onClick={e => { if(e.target===e.currentTarget) setTenderModal(null); }}>
-          <div style={{ background:'#0d0d0d', border:'1px solid rgba(251,191,36,0.3)', borderRadius:20, padding:28, width:'100%', maxWidth:480, boxShadow:'0 24px 80px rgba(0,0,0,0.9)' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
-              <span style={{ fontSize:28 }}>🏷</span>
-              <div>
-                <div style={{ fontSize:18, fontWeight:800, color:'#fff' }}>Offer for Tender</div>
-                <div style={{ fontSize:12, color:'#666', marginTop:2 }}>Bus companies will bid — lowest price wins</div>
-              </div>
-              <button onClick={() => setTenderModal(null)} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'#555', fontSize:22, cursor:'pointer', lineHeight:1 }}>×</button>
-            </div>
-
-            <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.15)', borderRadius:10, padding:'10px 14px', margin:'14px 0', fontSize:13, color:'#fbbf24', fontWeight:600 }}>
-              📍 {tenderModal.fromLoc} → {tenderModal.toLoc}
-            </div>
-
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-              <div>
-                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Date *</label>
-                <input type="date" value={tenderForm.ends_date} min={new Date().toISOString().slice(0,10)}
-                  onChange={e => setTenderForm({...tenderForm, ends_date:e.target.value})}
-                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Time *</label>
-                <input type="time" value={tenderForm.ends_time}
-                  onChange={e => setTenderForm({...tenderForm, ends_time:e.target.value})}
-                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginBottom:14 }}>
-              <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Notes for companies (optional)</label>
-              <input value={tenderForm.description}
-                onChange={e => setTenderForm({...tenderForm, description:e.target.value})}
-                placeholder="e.g. A/C required, min 20 seats…"
-                style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
-              />
-            </div>
-
-            {tenderErr && (
-              <div style={{ fontSize:12, color:'#f87171', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'8px 12px', marginBottom:12 }}>
-                ⚠ {tenderErr}
-              </div>
-            )}
-
-            <div style={{ display:'flex', gap:10 }}>
-              <button onClick={launchTender} disabled={tenderBusy} style={{
-                flex:1, background: tenderBusy?'#1a1a1a':'#fbbf24', color: tenderBusy?'#555':'#000',
-                border:'none', borderRadius:12, padding:'14px', cursor: tenderBusy?'default':'pointer',
-                fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:700,
-              }}>
-                {tenderBusy ? 'Launching…' : '⚡ Launch Tender'}
-              </button>
-              <button onClick={() => setTenderModal(null)} style={{ background:'transparent', color:'#555', border:'1px solid #222', borderRadius:12, padding:'14px 18px', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13 }}>
-                Cancel
-              </button>
-            </div>
-          </div>
+        {/* Main content */}
+        <div style={{ flex: 1, marginLeft: sidebarOpen ? 260 : 0, padding: 24, transition: 'margin .2s', minHeight: 'calc(100vh - 66px)' }}>
+          <PageComponent />
         </div>
-      )}
-
+      </div>
     </div>
   );
 }
