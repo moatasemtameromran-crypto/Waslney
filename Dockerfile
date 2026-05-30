@@ -2,11 +2,16 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy everything
 COPY . .
 
-# Build frontend → output goes into backend/public (per vite.config.js)
-RUN cd frontend && npm install && npm run build
+# Install pnpm
+RUN npm install -g pnpm@10
+
+# Install all workspace dependencies
+RUN pnpm install --no-frozen-lockfile
+
+# Build the frontend
+RUN cd artifacts/waslney && npx vite build --config vite.config.ts
 
 # Install backend dependencies
 RUN cd backend && npm install
