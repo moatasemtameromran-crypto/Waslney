@@ -1,5 +1,5 @@
 
-require('dotenv').config();
+try { require('dotenv').config(); } catch(e) {}
 const express    = require('express');
 const http       = require('http');
 const { Server } = require('socket.io');
@@ -60,7 +60,7 @@ require('./socket/tracking')(io);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 
 // ── SERVE FRONTEND BUILD ──────────────────────────────────
-const DIST = path.join(__dirname, 'public');
+const DIST = path.join(__dirname, '../artifacts/waslney/dist/public');
 app.use(express.static(DIST));
 
 app.get('*', (req, res) => {

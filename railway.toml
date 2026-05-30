@@ -1,10 +1,14 @@
-# railway.toml — tells Railway how to build and run your app
-
 [build]
-builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+builder = "NIXPACKS"
+
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[build.nixpacksPlan.phases.install]
+cmds = ["npx --yes pnpm@10 install --no-frozen-lockfile"]
+
+[build.nixpacksPlan.phases.build]
+cmds = ["npx pnpm@10 --filter '@workspace/waslney' --if-present run build"]
 
 [deploy]
 startCommand = "node backend/server.js"
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3

@@ -1,0 +1,218 @@
+Builds and deployments are slow to progress. We are investigating the incident.
+
+View details
+
+
+
+superb-light
+
+production
+
+
+19
+
+27 days or $4.71 left
+
+
+
+web
+Deployments
+Variables
+Metrics
+Settings
+web-production-8a609.up.railway.app
+US West
+1 Replica
+
+
+
+History
+
+Hide Skipped
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+web
+/
+577647b5
+Crashed
+
+May 30, 2026, 2:23 AM GMT+3
+web-production-8a609.up.railway.app
+Get Help
+Details
+Build Logs
+Deploy Logs
+HTTP Logs
+Network Flow Logs
+Filter and search logs
+
+    at require (node:internal/modules/helpers:141:16)
+  throw err;
+  ^
+Error: Cannot find module 'dotenv'
+Require stack:
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+- /app/backend/server.js
+    at Object..js (node:internal/modules/cjs/loader:1689:10)
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at Module.load (node:internal/modules/cjs/loader:1318:32) {
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/app/backend/server.js' ]
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+    at require (node:internal/modules/helpers:141:16)
+    at Object.<anonymous> (/app/backend/server.js:2:1)
+Node.js v22.11.0
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+    at Object..js (node:internal/modules/cjs/loader:1689:10)
+    at Module.load (node:internal/modules/cjs/loader:1318:32) {
+node:internal/modules/cjs/loader:1252
+  code: 'MODULE_NOT_FOUND',
+  throw err;
+  ^
+Require stack:
+Node.js v22.11.0
+- /app/backend/server.js
+  throw err;
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+  ^
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+Error: Cannot find module 'dotenv'
+Require stack:
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+- /app/backend/server.js
+    at require (node:internal/modules/helpers:141:16)
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at Object.<anonymous> (/app/backend/server.js:2:1)
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Object..js (node:internal/modules/cjs/loader:1689:10)
+    at Module.load (node:internal/modules/cjs/loader:1318:32) {
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+  requireStack: [ '/app/backend/server.js' ]
+Node.js v22.11.0
+  throw err;
+  ^
+Error: Cannot find module 'dotenv'
+Require stack:
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+    at require (node:internal/modules/helpers:141:16)
+    at Object.<anonymous> (/app/backend/server.js:2:1)
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+    at Object..js (node:internal/modules/cjs/loader:1689:10)
+    at Module.load (node:internal/modules/cjs/loader:1318:32) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/app/backend/server.js' ]
+}
+Node.js v22.11.0
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+  requireStack: [ '/app/backend/server.js' ]
+    at require (node:internal/modules/helpers:141:16)
+    at Object.<anonymous> (/app/backend/server.js:2:1)
+}
+- /app/backend/server.js
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+    at Object..js (node:internal/modules/cjs/loader:1689:10)
+    at Module.load (node:internal/modules/cjs/loader:1318:32) {
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+  code: 'MODULE_NOT_FOUND',
+Error: Cannot find module 'dotenv'
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+Require stack:
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+- /app/backend/server.js
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+Require stack:
+Node.js v22.11.0
+  throw err;
+  ^
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+node:internal/modules/cjs/loader:1252
+Node.js v22.11.0
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+    at require (node:internal/modules/helpers:141:16)
+    at Object..js (node:internal/modules/cjs/loader:1689:10)
+  ^
+    at Object.<anonymous> (/app/backend/server.js:2:1)
+    at Module.load (node:internal/modules/cjs/loader:1318:32) {
+Error: Cannot find module 'dotenv'
+Require stack:
+- /app/backend/server.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+node:internal/modules/cjs/loader:1252
+  throw err;
+  ^
+Require stack:
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+    at Object..js (node:internal/modules/cjs/loader:1689:10)
+  requireStack: [ '/app/backend/server.js' ]
+Node.js v22.11.0
+Node.js v22.11.0
+node:internal/modules/cjs/loader:1252
+    at Object..js (node:internal/modules/cjs/loader:1689:10)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+  throw err;
+  ^
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+Error: Cannot find module 'dotenv'
+  requireStack: [ '/app/backend/server.js' ]
+Require stack:
+}
+- /app/backend/server.js
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+  throw err;
+Require stack:
+- /app/backend/server.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+    at Module.require (node:internal/modules/cjs/loader:1340:12)
+    at Object.<anonymous> (/app/backend/server.js:2:1)
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+  requireStack: [ '/app/backend/server.js' ]
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+node:internal/modules/cjs/loader:1252
+  throw err;
+    at wrapModuleLoad (node:internal/modules/cjs/loader:218:24)
+  ^
+Error: Cannot find module 'dotenv'
+Require stack:
+    at Module._compile (node:internal/modules/cjs/loader:1546:14)
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)
+    at Module.load (node:internal/modules/cjs/loader:1318:32) {
+    at Function._load (node:internal/modules/cjs/loader:1075:27)
+  code: 'MODULE_NOT_FOUND',
+You reached the end of the range
+May 30, 2026, 2:25 AM

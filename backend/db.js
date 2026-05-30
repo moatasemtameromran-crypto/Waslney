@@ -1,32 +1,31 @@
-require('dotenv').config();
+try { require('dotenv').config(); } catch(e) {}
 const mysql = require('mysql2/promise');
 
 const pool = mysql.createPool({
-  host:               process.env.DB_HOST     || 'localhost',
-  user:               process.env.DB_USER     || 'u946447529_Moatasem',
-  password:           process.env.DB_PASS     || 'Ilovemom_dad2',
-  database:           process.env.DB_NAME     || 'u946447529_Wasalney',
-  port:               parseInt(process.env.DB_PORT) || 3306,
+  host:               process.env.MYSQL_HOST     || process.env.DB_PUBLIC_HOST || process.env.DB_HOST || 'localhost',
+  user:               process.env.MYSQL_USER     || process.env.DB_USER        || 'root',
+  password:           process.env.MYSQL_PASSWORD || process.env.DB_PASS        || '',
+  database:           process.env.MYSQL_DATABASE || process.env.DB_NAME        || 'railway',
+  port:               parseInt(process.env.MYSQL_PORT || process.env.DB_PORT)  || 3306,
   waitForConnections: true,
   connectionLimit:    10,
   queueLimit:         0,
   timezone:           '+00:00',
-  // Keeps connection alive on shared hosting
   enableKeepAlive:    true,
   keepAliveInitialDelay: 0,
 });
 
+const dbName = process.env.MYSQL_DATABASE || process.env.DB_NAME || 'railway';
 pool.getConnection()
   .then(conn => {
-    console.log(`✅  MySQL connected — database: ${process.env.DB_NAME || 'u946447529_Wasalney'}`);
+    console.log(`✅  MySQL connected — database: ${dbName}`);
     conn.release();
   })
   .catch(err => {
     console.error('❌  MySQL connection failed:', err.message);
-    console.error('    Host:', process.env.DB_HOST);
-    console.error('    User:', process.env.DB_USER);
-    console.error('    DB:  ', process.env.DB_NAME);
-    console.error('    Port:', process.env.DB_PORT);
+    console.error('    Host:', process.env.MYSQL_HOST || process.env.DB_PUBLIC_HOST || process.env.DB_HOST);
+    console.error('    User:', process.env.MYSQL_USER || process.env.DB_USER);
+    console.error('    DB:  ', dbName);
     process.exit(1);
   });
 

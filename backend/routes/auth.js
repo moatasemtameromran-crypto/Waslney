@@ -1,5 +1,5 @@
 // backend/routes/auth.js
-require('dotenv').config();
+try { require('dotenv').config(); } catch(e) {}
 const express    = require('express');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
@@ -187,7 +187,7 @@ router.get('/me', requireAuth, async (req, res) => {
       [req.user.id]
     );
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user });
+    res.json(user);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

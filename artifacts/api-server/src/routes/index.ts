@@ -1,0 +1,51 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health.js";
+import adminAuth from "./admin/auth.js";
+import adminDashboard from "./admin/dashboard.js";
+import adminUsers from "./admin/users.js";
+import adminTrips from "./admin/trips.js";
+import adminAnalytics from "./admin/analytics.js";
+import adminPromotions from "./admin/promotions.js";
+import adminCities from "./admin/cities.js";
+import adminHolidays from "./admin/holidays.js";
+import adminCancellation from "./admin/cancellation.js";
+import adminVehicleTypes from "./admin/vehicleTypes.js";
+import adminVehicles from "./admin/vehicles.js";
+import adminStops from "./admin/stops.js";
+import adminRoutes from "./admin/routes.js";
+import adminShuttleTrips from "./admin/shuttleTrips.js";
+import adminFare from "./admin/fare.js";
+import adminShuttlePass from "./admin/shuttlePass.js";
+import adminPushes from "./admin/pushes.js";
+import adminHomescreen from "./admin/homescreen.js";
+import adminSuggestedRoutes from "./admin/suggestedRoutes.js";
+import adminDriverDocuments from "./admin/driverDocuments.js";
+import adminSettings from "./admin/settings.js";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+
+router.use("/admin/auth", adminAuth);
+router.use("/admin/dashboard", adminDashboard);
+router.use("/admin/users", adminUsers);
+router.use("/admin/trips", adminTrips);
+router.use("/admin/analytics", adminAnalytics);
+router.use("/admin/promotions", adminPromotions);
+router.use("/admin/cities", adminCities);
+router.use("/admin/holidays", adminHolidays);
+router.use("/admin/cancellation", adminCancellation);
+router.use("/admin/vehicle-types", adminVehicleTypes);
+router.use("/admin/vehicles", adminVehicles);
+router.use("/admin/stops", adminStops);
+router.use("/admin/shuttle-routes", adminRoutes);
+router.use("/admin/shuttle-trips", adminShuttleTrips);
+router.use("/admin/fare", adminFare);
+router.use("/admin/shuttle-pass", adminShuttlePass);
+router.use("/admin/pushes", adminPushes);
+router.use("/admin/homescreen", adminHomescreen);
+router.use("/admin/suggested-routes", adminSuggestedRoutes);
+router.use("/admin/driver-documents", adminDriverDocuments);
+router.use("/admin/settings", adminSettings);
+
+export default router;
