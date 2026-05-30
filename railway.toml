@@ -5,10 +5,15 @@ builder = "NIXPACKS"
 nixPkgs = ["nodejs_22"]
 
 [build.nixpacksPlan.phases.install]
-cmds = ["npx --yes pnpm@10 install --no-frozen-lockfile"]
+cmds = [
+  "npm install -g pnpm@10",
+  "pnpm install --no-frozen-lockfile"
+]
 
 [build.nixpacksPlan.phases.build]
-cmds = ["npx pnpm@10 --filter '@workspace/waslney' --if-present run build"]
+cmds = [
+  "cd artifacts/waslney && npx vite build --config vite.config.ts"
+]
 
 [deploy]
 startCommand = "node backend/server.js"
