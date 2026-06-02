@@ -4,17 +4,14 @@ WORKDIR /app
 
 COPY . .
 
-# Install pnpm
 RUN npm install -g pnpm@10
 
-# Install all workspace dependencies
 RUN pnpm install --no-frozen-lockfile
 
-# Build the frontend
-RUN cd artifacts/waslney && npx vite build --config vite.config.ts
+# Run vite build with full error output
+RUN cd artifacts/waslney && npx vite build --config vite.config.ts 2>&1 || (echo "=== VITE BUILD FAILED ===" && cat vite.config.ts && exit 1)
 
-# Install backend dependencies
-RUN cd backend && npm install
+RUN cd backend && npm install --legacy-peer-deps
 
 EXPOSE 3001
 
