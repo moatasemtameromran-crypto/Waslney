@@ -4,17 +4,13 @@ WORKDIR /app
 
 COPY . .
 
-# Install pnpm
 RUN npm install -g pnpm@10
 
-# Install workspace deps (resolves @workspace/* packages)
+# Install all workspace deps including waslney's local node_modules
 RUN pnpm install --no-frozen-lockfile
 
-# Install vite and deps locally inside waslney so npx finds them
-RUN cd artifacts/waslney && npm install --legacy-peer-deps
-
-# Now build using the local vite
-RUN cd artifacts/waslney && ./node_modules/.bin/vite build --config vite.config.ts
+# Build using the vite installed by pnpm in the workspace
+RUN cd artifacts/waslney && pnpm exec vite build --config vite.config.ts
 
 # Install backend deps
 RUN cd backend && npm install --legacy-peer-deps
