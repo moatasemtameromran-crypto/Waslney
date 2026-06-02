@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -8,8 +8,7 @@ RUN npm install -g pnpm@10
 
 RUN pnpm install --no-frozen-lockfile
 
-# Run vite build with full error output
-RUN cd artifacts/waslney && npx vite build --config vite.config.ts 2>&1 || (echo "=== VITE BUILD FAILED ===" && cat vite.config.ts && exit 1)
+RUN cd artifacts/waslney && npx vite build --config vite.config.ts
 
 RUN cd backend && npm install --legacy-peer-deps
 
