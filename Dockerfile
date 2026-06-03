@@ -1,20 +1,11 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
 COPY . .
 
-# Install pnpm
-RUN npm install -g pnpm@10
-
-# Install all workspace dependencies
-RUN pnpm install --no-frozen-lockfile
-
-# Build the frontend
-RUN cd artifacts/waslney && npx vite build --config vite.config.ts
-
-# Install backend dependencies
-RUN cd backend && npm install
+# Only install backend deps - frontend is pre-built
+RUN cd backend && npm install --legacy-peer-deps
 
 EXPOSE 3001
 
