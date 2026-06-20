@@ -352,6 +352,7 @@ export default function AdminDash() {
           { id:'review',         label:`📋 Review${pendingDrivers.length > 0 ? ` (${pendingDrivers.length})` : ''}` },
           { id:'create-account',   label:'👤 New Account' },
           { id:'manage-bookings',  label:'📅 Manage Bookings' },
+          { id:'app-notifications', label:'🔔 Notify' },
         ]} active={tab} onSet={goTab} />
 
         {/* ── OVERVIEW ── */}
@@ -804,6 +805,8 @@ export default function AdminDash() {
           <ManageBookingsTab token={localStorage.getItem('shuttle_token')} notify={notify} trips={trips} />
         )}
 
+        {tab === 'app-notifications' && <AppNotificationsTab notify={notify} />}
+
       </div>
     </div>
   );
@@ -921,6 +924,98 @@ function CreateAccountTab({ token, notify }) {
           <div style={{ fontSize: 13, color: '#fff', fontWeight: 600 }}>{created.name}</div>
           <div style={{ fontSize: 12, color: C.text2, marginTop: 2 }}>{created.phone} · {created.role}</div>
           <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Status: {created.account_status}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// APP NOTIFICATIONS TAB — admin composes a custom push + in-app notification
+// ──────────────────────────────────────────────────────────────────────────────
+function AppNotificationsTab({ notify }) {
+  const AUDIENCES = [
+    { id:'all',       label:'Everyone',   emoji:'📣', color:C.blue   },
+    { id:'passenger', label:'Passengers', emoji:'🎫', color:C.purple },
+    { id:'driver',    label:'Drivers',    emoji:'🚐', color:C.amber  },
+  ];
+  const [audience, setAudience] = React.useState('all');
+  const [title,    setTitle]    = React.useState('');
+  const [message,  setMessage]  = React.useState('');
+  const [loading,  setLoading]  = React.useState(false);
+  const [result,   setResult]   = React.useState(null);
+
+  async function send() {
+    if (!message.trim()) { notify('Message required', 'Type the notification message first.', 'error'); return; }
+    setLoading(true); setResult(null);
+    try {
+      const res = await api.adminBroadcast({ message: message.trim(), title: title.trim(), audience });
+      setResult(res);
+      notify('Notification sent ✅', `Saved to ${res.recipients} inbox(es).`);
+      setMessage(''); setTitle('');
+    } catch (e) {
+      notify('Error', e.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <p style={sectSt}>Send a notification to users' phones — they get a push + an in-app alert</p>
+
+      {/* Audience selector */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 11, color: C.text3, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Send to</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {AUDIENCES.map(a => (
+            <button key={a.id} onClick={() => setAudience(a.id)}
+              style={{
+                flex: 1, padding: '10px 6px', borderRadius: 10,
+                border: `1.5px solid ${audience === a.id ? a.color : C.border}`,
+                background: audience === a.id ? `${a.color}18` : C.bg2,
+                color: audience === a.id ? a.color : C.text2,
+                fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif",
+                transition: 'all .15s',
+              }}>
+              <div style={{ fontSize: 18, marginBottom: 4 }}>{a.emoji}</div>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Inp label="Title (optional)" value={title} onChange={e => setTitle(e.target.value)} placeholder="Waslney" />
+
+      {/* Message */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ fontSize: 11, color: C.text3, letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Message</label>
+        <textarea
+          style={{ width: '100%', minHeight: 110, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '13px 16px', color: '#fff', fontFamily: "'Sora',sans-serif", fontSize: 14, outline: 'none', boxSizing: 'border-box', resize: 'vertical' }}
+          value={message} onChange={e => setMessage(e.target.value)}
+          placeholder="e.g. Service update: Friday trips will start one hour earlier."
+          maxLength={500}
+        />
+        <div style={{ fontSize: 11, color: C.text3, textAlign: 'right', marginTop: 4 }}>{message.length}/500</div>
+      </div>
+
+      <button onClick={send} disabled={loading}
+        style={{ ...btnPrimary, opacity: loading ? .6 : 1, marginTop: 4 }}>
+        {loading ? 'Sending…' : '🔔 Send notification →'}
+      </button>
+
+      {result && (
+        <div style={{ marginTop: 20, background: '#0d190d', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 12, padding: '14px 16px' }}>
+          <div style={{ fontSize: 11, color: '#4ade80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>✅ Sent</div>
+          <div style={{ fontSize: 13, color: '#fff' }}>Saved to {result.recipients} inbox(es).</div>
+          <div style={{ fontSize: 12, color: C.text2, marginTop: 2 }}>
+            Pushed to {result.push?.sent ?? 0} device(s){result.push?.failed ? ` · ${result.push.failed} failed` : ''}.
+          </div>
+          {(!result.push || (result.push.sent ?? 0) === 0) && (
+            <div style={{ fontSize: 11, color: C.text3, marginTop: 6 }}>
+              No live push delivered yet — a user must open the app (logged in) at least once so their phone registers for notifications.
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { requireAuth } = require('../auth');
+const { requireAuth, requireRole } = require('../auth');
+const { sendPushToAll, sendPushToRole } = require('../push');
 
 // POST /api/notifications/register-device  { token, platform }
 // Saves (or moves) an FCM device token to the logged-in user.
@@ -53,6 +54,41 @@ router.put('/read-all', requireAuth, async (req, res) => {
     res.json({ message: 'All marked as read' });
   } catch (err) {
     console.error(err); res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/notifications/broadcast  { message, title, audience }
+// Admin-only. Composes a custom notification: stores an in-app row for every
+// targeted user AND sends a push to their phones. audience = all|passenger|driver.
+router.post('/broadcast', requireAuth, requireRole('admin'), async (req, res) => {
+  const message  = (req.body.message  || '').trim();
+  const title    = (req.body.title    || 'Waslney').trim();
+  const audience = (req.body.audience || 'all').trim();
+  if (!message) return res.status(400).json({ error: 'message required' });
+  if (!['all', 'passenger', 'driver'].includes(audience))
+    return res.status(400).json({ error: 'invalid audience' });
+  try {
+    // Find recipients
+    let sql = 'SELECT id FROM users';
+    const params = [];
+    if (audience !== 'all') { sql += ' WHERE role = ?'; params.push(audience); }
+    const [users] = await db.query(sql, params);
+
+    // Store the in-app notification for each recipient (bulk insert)
+    if (users.length) {
+      const values = users.map(u => [u.id, message]);
+      await db.query('INSERT INTO notifications (user_id, message) VALUES ?', [values]);
+    }
+
+    // Send the push to phones
+    const push = audience === 'all'
+      ? await sendPushToAll(title, message, { type: 'broadcast' })
+      : await sendPushToRole(audience, title, message, { type: 'broadcast' });
+
+    res.json({ ok: true, recipients: users.length, push });
+  } catch (err) {
+    console.error('broadcast error:', err.message);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

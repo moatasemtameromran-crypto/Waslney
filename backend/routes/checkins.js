@@ -31,8 +31,10 @@ router.post('/stop-arrived', requireAuth, requireRole('driver'), async (req, res
     const stopLabel = stopRows[0]?.label || `Stop ${stop_index + 1}`;
 
     for (const b of bookings) {
+      const msg = `🚐 Driver has arrived at pickup point: ${stopLabel}. Please be ready!`;
       await db.query('INSERT INTO notifications (user_id,message) VALUES (?,?)',
-        [b.passenger_id, `🚐 Driver has arrived at pickup point: ${stopLabel}. Please be ready!`]);
+        [b.passenger_id, msg]);
+      sendPushToUser(b.passenger_id, 'Driver arrived 🚐', msg, { tripId: String(trip_id) }).catch(()=>{});
     }
 
     res.json({ message: 'Stop marked as arrived', notified: bookings.length });
