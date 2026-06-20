@@ -29,38 +29,11 @@ function signToken(user) {
 }
 
 // ── POST /api/auth/send-otp ───────────────────────────────────────────────────
-router.post('/send-otp', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email required' });
-
-  const code    = String(Math.floor(100000 + Math.random() * 900000));
-  const expires = Date.now() + 10 * 60 * 1000; // 10 min
-  otpStore.set(email, { code, expires });
-
-  try {
-    await transporter.sendMail({
-      from: `"Waslney" <${process.env.MAIL_USER}>`,
-      to: email,
-      subject: 'Your Waslney verification code',
-      html: `
-        <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#0d0d0d;border-radius:16px;color:#fff">
-          <h2 style="color:#fbbf24;margin-bottom:8px">Verify your email</h2>
-          <p style="color:#aaa;margin-bottom:24px">Use the code below to complete your Waslney registration. It expires in 10 minutes.</p>
-          <div style="letter-spacing:12px;font-size:36px;font-weight:800;text-align:center;padding:20px;background:#1a1a1a;border-radius:12px;color:#fff;margin-bottom:24px">
-            ${code}
-          </div>
-          <p style="color:#555;font-size:12px">If you didn't request this, you can safely ignore this email.</p>
-        </div>
-      `,
-    });
-
-    console.log(`✉️  OTP sent to ${email}`);
-    res.json({ ok: true });
-
-  } catch (err) {
-    console.error('Mail send error:', err);
-    res.status(500).json({ error: 'Failed to send verification email. Check MAIL_USER / MAIL_PASS in .env' });
-  }
+// Email OTP verification has been DISABLED. This endpoint is kept only so older
+// app builds that still call it keep working — it always succeeds without sending
+// any email.
+router.post('/send-otp', (req, res) => {
+  res.json({ ok: true, disabled: true });
 });
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
@@ -74,16 +47,11 @@ router.post('/register', async (req, res) => {
     criminal_record_photo,
   } = req.body;
 
-  if (!name || !phone || !email || !password || !role) {
+  if (!name || !phone || !password || !role) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  // Verify OTP against email
-  const stored = otpStore.get(email);
-  if (!stored || stored.code !== String(otp) || Date.now() > stored.expires) {
-    return res.status(400).json({ error: 'Invalid or expired OTP' });
-  }
-  otpStore.delete(email);
+  // Email OTP verification removed — accounts are created directly.
 
   // Check phone not already taken
   const [[existing]] = await db.query('SELECT id FROM users WHERE phone = ?', [phone]);
@@ -187,37 +155,28 @@ router.get('/me', requireAuth, async (req, res) => {
 
 
 // ── POST /api/auth/verify-reset-otp ──────────────────────────────────────────
-router.post('/verify-reset-otp', async (req, res) => {
-  const { email, otp } = req.body;
-  if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
-
-  const stored = otpStore.get(email);
-  if (!stored || stored.code !== String(otp) || Date.now() > stored.expires) {
-    return res.status(400).json({ error: 'Invalid or expired code' });
-  }
-  // Don't delete — keep it for the reset-password step
+// Verification disabled — always allow the reset flow to proceed.
+router.post('/verify-reset-otp', (req, res) => {
   res.json({ ok: true });
 });
 
 // ── POST /api/auth/reset-password ─────────────────────────────────────────────
+// No OTP. Reset by phone (preferred) or email + new password.
 router.post('/reset-password', async (req, res) => {
-  const { email, otp, password } = req.body;
-  if (!email || !otp || !password) return res.status(400).json({ error: 'Missing fields' });
-
-  // Verify OTP one final time
-  const stored = otpStore.get(email);
-  if (!stored || stored.code !== String(otp) || Date.now() > stored.expires) {
-    return res.status(400).json({ error: 'Invalid or expired code' });
+  const { email, phone, password } = req.body;
+  if ((!email && !phone) || !password) {
+    return res.status(400).json({ error: 'Phone (or email) and new password required' });
   }
-  otpStore.delete(email);
 
-  // Check user exists
-  const [[user]] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
-  if (!user) return res.status(404).json({ error: 'No account found with this email' });
+  // Find user by phone first, otherwise by email
+  const [[user]] = phone
+    ? await db.query('SELECT id FROM users WHERE phone = ?', [phone])
+    : await db.query('SELECT id FROM users WHERE email = ?', [email]);
+  if (!user) return res.status(404).json({ error: 'No account found' });
 
   try {
     const hash = await bcrypt.hash(password, 10);
-    await db.query('UPDATE users SET password = ? WHERE email = ?', [hash, email]);
+    await db.query('UPDATE users SET password = ? WHERE id = ?', [hash, user.id]);
     res.json({ ok: true });
   } catch (e) {
     console.error('Reset password error:', e);

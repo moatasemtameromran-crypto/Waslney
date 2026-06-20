@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '../App.jsx';
-import { sendOTP, register, login } from '../api.js';
+import { register, login } from '../api.js';
 import { WaslneyLogo, Inp, btnPrimary } from '../components/UI.jsx';
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -118,15 +118,15 @@ export default function Landing({ onEnterCompanyPortal }) {
   const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
   const d = k => v  => setDocs(p => ({ ...p, [k]: v }));
 
-  // ── Step 1 → Step 2 (driver) or OTP (others) ─────────────────────────────
+  // ── Step 1 → docs (driver) or register directly (others) ──────────────────
   async function handleInfoNext() {
     if (!form.name || !form.phone || !form.password) { notify('Missing info', 'Fill in all fields.', 'error'); return; }
     if (role === 'driver' && (!form.car || !form.plate)) { notify('Missing info', 'Enter car model and plate.', 'error'); return; }
     if (role === 'driver') { setMode('docs'); }
-    else { await sendOTPStep(); }
+    else { await submitRegister(); }
   }
 
-  // ── Step 2 → OTP ──────────────────────────────────────────────────────────
+  // ── Step 2 → register (driver) ─────────────────────────────────────────────
   async function handleDocsNext() {
     const errs = {};
     if (!docs.profile)     errs.profile     = 'Required';
@@ -135,7 +135,7 @@ export default function Landing({ onEnterCompanyPortal }) {
     if (!docs.criminal)    errs.criminal    = 'Required';
     setDocErr(errs);
     if (Object.keys(errs).length) { notify('Missing photos', 'Upload all 4 photos to continue.', 'error'); return; }
-    await sendOTPStep();
+    await submitRegister();
   }
 
   function startResendTimer() {
@@ -145,107 +145,12 @@ export default function Landing({ onEnterCompanyPortal }) {
     }, 1000);
   }
 
-  async function sendOTPStep() {
-    setLoading(true);
-    try {
-      const res = await sendOTP(form.email);
-      // email OTP - no dev code
-      setMode('otp');
-      startResendTimer();
-      notify('Code sent', 'Check your email for the 6-digit code.', 'info');
-    } catch(e) { notify('Error', e.message, 'error'); }
-    finally { setLoading(false); }
-  }
-
-  async function handleResend() {
-    setLoading(true);
-    try {
-      await sendOTP(form.email);
-      setOtp(['','','','','','']);
-      startResendTimer();
-      notify('Code resent', 'A new code was sent to your email.', 'info');
-    } catch(e) { notify('Error', e.message, 'error'); }
-    finally { setLoading(false); }
-  }
-
-  // ── Forgot password flow ──────────────────────────────────────────────────
-  async function handleForgotSendOTP() {
-    if (!resetEmail) { notify('Required', 'Enter your email address.', 'error'); return; }
-    setLoading(true);
-    try {
-      await sendOTP(resetEmail);
-      setResetStep('otp');
-      startResendTimer();
-      notify('Code sent', 'Check your email for the 6-digit code.', 'info');
-    } catch(e) { notify('Error', e.message, 'error'); }
-    finally { setLoading(false); }
-  }
-
-  async function handleForgotVerifyOTP() {
-    const code = resetOtp.join('');
-    if (code.length < 6) { notify('Incomplete', 'Enter all 6 digits.', 'error'); return; }
-    setLoading(true);
-    try {
-      // verify OTP exists by calling reset endpoint
-      const res = await fetch('/api/auth/verify-reset-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail, otp: code }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Invalid code');
-      setResetStep('newpass');
-    } catch(e) { notify('Error', e.message, 'error'); }
-    finally { setLoading(false); }
-  }
-
-  async function handleForgotSetPassword() {
-    if (!newPassword || newPassword.length < 6) { notify('Too short', 'Password must be at least 6 characters.', 'error'); return; }
-    setLoading(true);
-    try {
-      const code = resetOtp.join('');
-      const res = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail, otp: code, password: newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
-      notify('Password updated!', 'You can now sign in.', 'info');
-      setMode('login');
-      setResetStep('email'); setResetEmail(''); setResetOtp(['','','','','','']); setNewPassword('');
-    } catch(e) { notify('Error', e.message, 'error'); }
-    finally { setLoading(false); }
-  }
-
-  function handleOtpPaste(e, setter) {
-    const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
-    if (!text) return;
-    e.preventDefault();
-    const arr = text.split('').concat(['','','','','','']).slice(0,6);
-    setter(arr);
-    const last = Math.min(text.length, 5);
-    setTimeout(() => document.getElementById(`o${last}`)?.focus(), 0);
-  }
-
-  function handleResetOtpPaste(e) {
-    const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
-    if (!text) return;
-    e.preventDefault();
-    const arr = text.split('').concat(['','','','','','']).slice(0,6);
-    setResetOtp(arr);
-    const last = Math.min(text.length, 5);
-    setTimeout(() => document.getElementById(`r${last}`)?.focus(), 0);
-  }
-
-  // ── OTP verify + register ─────────────────────────────────────────────────
-  async function handleVerify() {
-    const code = otp.join('');
-    if (code.length < 6) { notify('Incomplete', 'Enter all 6 digits.', 'error'); return; }
+  // ── Create account directly (no email OTP / verification) ──────────────────
+  async function submitRegister() {
     setLoading(true);
     try {
       const payload = {
-        ...form, role, otp: code, email: form.email,
+        ...form, role, email: form.email,
         ...(role === 'driver' ? {
           profile_photo:         docs.profile,
           car_license_photo:     docs.carLicense,
@@ -261,6 +166,25 @@ export default function Landing({ onEnterCompanyPortal }) {
         doLogin(data.user, data.token);
         notify('Welcome!', 'Account created.');
       }
+    } catch(e) { notify('Error', e.message, 'error'); }
+    finally { setLoading(false); }
+  }
+
+  // ── Forgot password (no OTP) — reset by phone + new password ───────────────
+  async function handleForgotSetPassword() {
+    if (!newPassword || newPassword.length < 6) { notify('Too short', 'Password must be at least 6 characters.', 'error'); return; }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: resetEmail, password: newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      notify('Password updated!', 'You can now sign in.', 'info');
+      setMode('login');
+      setResetStep('email'); setResetEmail(''); setNewPassword('');
     } catch(e) { notify('Error', e.message, 'error'); }
     finally { setLoading(false); }
   }
@@ -429,7 +353,7 @@ export default function Landing({ onEnterCompanyPortal }) {
 
       <button onClick={handleInfoNext} disabled={loading}
         style={{ ...btnPrimary, opacity: loading ? .6:1, marginTop:8 }}>
-        {loading ? 'Please wait…' : role === 'driver' ? 'Continue to documents →' : 'Continue →'}
+        {loading ? 'Please wait…' : role === 'driver' ? 'Continue to documents →' : 'Create account →'}
       </button>
       <p style={{ textAlign:'center', marginTop:20, fontSize:12, color:'#444' }}>
         Already have an account?{' '}
@@ -470,59 +394,8 @@ export default function Landing({ onEnterCompanyPortal }) {
 
       <button onClick={handleDocsNext} disabled={loading}
         style={{ ...btnPrimary, opacity: loading ? .6:1, marginTop:16 }}>
-        {loading ? 'Please wait…' : 'Continue to verify →'}
+        {loading ? 'Please wait…' : 'Create account →'}
       </button>
-    </Page>
-  );
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // STEP 3 — OTP
-  // ══════════════════════════════════════════════════════════════════════════
-  if (mode === 'otp') return (
-    <Page onBack={() => setMode(role === 'driver' ? 'docs' : 'signup')}>
-      {role === 'driver' && <Steps step={3} />}
-      <div style={{ textAlign:'center' }}>
-        <div style={{ fontSize:52, marginBottom:16 }}>✉️</div>
-        <h2 style={{ fontSize:24, fontWeight:800, color:'#fff', marginBottom:8 }}>Verify your email</h2>
-        <p style={{ color:'#666', fontSize:14, marginBottom:6 }}>Code sent to {form.email}</p>
-
-        <div style={{ display:'flex', gap:10, justifyContent:'center', marginBottom:32 }}>
-          {otp.map((v,i) => (
-            <input key={i} id={`o${i}`} maxLength={1} value={v}
-              onChange={e => {
-                const val = e.target.value.replace(/\D/g,'');
-                const n=[...otp]; n[i]=val; setOtp(n);
-                if (val && i<5) document.getElementById(`o${i+1}`)?.focus();
-              }}
-              onKeyDown={e => {
-                if (e.key==='Backspace') { e.preventDefault();
-                  const n=[...otp];
-                  if (n[i]) { n[i]=''; setOtp(n); }
-                  else if (i>0) { n[i-1]=''; setOtp(n); document.getElementById(`o${i-1}`)?.focus(); }
-                }
-              }}
-              onPaste={e => {
-                e.preventDefault();
-                const text = e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
-                const n=[...otp]; text.split('').forEach((ch,idx) => { if(idx<6) n[idx]=ch; }); setOtp(n);
-                document.getElementById(`o${Math.min(text.length,5)}`)?.focus();
-              }}
-              style={{ width:48, height:58, background:'#1a1a1a', border:'1px solid #333', borderRadius:12, textAlign:'center', fontSize:24, fontFamily:'monospace', color:'#fff', outline:'none' }} />
-          ))}
-        </div>
-        <button onClick={handleVerify} disabled={loading}
-          style={{ ...btnPrimary, opacity: loading ? .6:1 }}>
-          {loading ? 'Verifying…' : 'Verify & continue →'}
-        </button>
-        <div style={{ marginTop:20 }}>
-          {resendTimer > 0
-            ? <p style={{ color:'#555', fontSize:13 }}>Resend code in {resendTimer}s</p>
-            : <button onClick={handleResend} disabled={loading} style={{ background:'none', border:'none', color:'#fbbf24', fontSize:13, cursor:'pointer', fontWeight:600 }}>
-                Resend code
-              </button>
-          }
-        </div>
-      </div>
     </Page>
   );
 
@@ -530,74 +403,26 @@ export default function Landing({ onEnterCompanyPortal }) {
   // LOGIN
   // ══════════════════════════════════════════════════════════════════════════
   // ══════════════════════════════════════════════════════════════════════════
-  // FORGOT PASSWORD — step: email
+  // FORGOT PASSWORD — step: phone
   // ══════════════════════════════════════════════════════════════════════════
   if (mode === 'forgot' && resetStep === 'email') return (
     <Page onBack={() => setMode('login')}>
       <div style={{ textAlign:'center', marginBottom:32 }}>
         <div style={{ fontSize:48, marginBottom:12 }}>🔑</div>
         <h2 style={{ fontSize:24, fontWeight:800, color:'#fff', marginBottom:8 }}>Reset password</h2>
-        <p style={{ color:'#666', fontSize:14 }}>Enter your email and we'll send a reset code</p>
+        <p style={{ color:'#666', fontSize:14 }}>Enter your phone number to set a new password</p>
       </div>
-      <Inp label="Email address" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="you@example.com" type="email" />
-      <button onClick={handleForgotSendOTP} disabled={loading}
+      <Inp label="Phone number" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="+20 100 000 0000" />
+      <button onClick={() => { if (!resetEmail) { notify('Required', 'Enter your phone number.', 'error'); return; } setResetStep('newpass'); }} disabled={loading}
         style={{ ...btnPrimary, opacity: loading ? .6:1, marginTop:8 }}>
-        {loading ? 'Sending…' : 'Send reset code →'}
+        Continue →
       </button>
-    </Page>
-  );
-
-  // FORGOT PASSWORD — step: otp
-  if (mode === 'forgot' && resetStep === 'otp') return (
-    <Page onBack={() => setResetStep('email')}>
-      <div style={{ textAlign:'center' }}>
-        <div style={{ fontSize:52, marginBottom:16 }}>✉️</div>
-        <h2 style={{ fontSize:24, fontWeight:800, color:'#fff', marginBottom:8 }}>Enter reset code</h2>
-        <p style={{ color:'#666', fontSize:14, marginBottom:28 }}>Code sent to {resetEmail}</p>
-        <div style={{ display:'flex', gap:10, justifyContent:'center', marginBottom:32 }}>
-          {resetOtp.map((v,i) => (
-            <input key={i} id={`r${i}`} maxLength={1} value={v}
-              onChange={e => {
-                const val = e.target.value.replace(/\D/g,'');
-                const n=[...resetOtp]; n[i]=val; setResetOtp(n);
-                if (val && i<5) document.getElementById(`r${i+1}`)?.focus();
-              }}
-              onKeyDown={e => {
-                if (e.key==='Backspace') { e.preventDefault();
-                  const n=[...resetOtp];
-                  if (n[i]) { n[i]=''; setResetOtp(n); }
-                  else if (i>0) { n[i-1]=''; setResetOtp(n); document.getElementById(`r${i-1}`)?.focus(); }
-                }
-              }}
-              onPaste={e => {
-                e.preventDefault();
-                const text = e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
-                const n=[...resetOtp]; text.split('').forEach((ch,idx) => { if(idx<6) n[idx]=ch; }); setResetOtp(n);
-                document.getElementById(`r${Math.min(text.length,5)}`)?.focus();
-              }}
-              style={{ width:48, height:58, background:'#1a1a1a', border:'1px solid #333', borderRadius:12, textAlign:'center', fontSize:24, fontFamily:'monospace', color:'#fff', outline:'none' }} />
-          ))}
-        </div>
-        <button onClick={handleForgotVerifyOTP} disabled={loading}
-          style={{ ...btnPrimary, opacity: loading ? .6:1 }}>
-          {loading ? 'Verifying…' : 'Verify code →'}
-        </button>
-        <div style={{ marginTop:20 }}>
-          {resendTimer > 0
-            ? <p style={{ color:'#555', fontSize:13 }}>Resend code in {resendTimer}s</p>
-            : <button onClick={async () => { setLoading(true); try { await sendOTP(resetEmail); setResetOtp(['','','','','','']); startResendTimer(); notify('Code resent','Check your email.','info'); } catch(e){notify('Error',e.message,'error');} finally{setLoading(false);} }} disabled={loading}
-                style={{ background:'none', border:'none', color:'#fbbf24', fontSize:13, cursor:'pointer', fontWeight:600 }}>
-                Resend code
-              </button>
-          }
-        </div>
-      </div>
     </Page>
   );
 
   // FORGOT PASSWORD — step: new password
   if (mode === 'forgot' && resetStep === 'newpass') return (
-    <Page onBack={() => setResetStep('otp')}>
+    <Page onBack={() => setResetStep('email')}>
       <div style={{ textAlign:'center', marginBottom:32 }}>
         <div style={{ fontSize:48, marginBottom:12 }}>🔒</div>
         <h2 style={{ fontSize:24, fontWeight:800, color:'#fff', marginBottom:8 }}>Set new password</h2>
