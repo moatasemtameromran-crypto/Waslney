@@ -31,6 +31,25 @@ export async function initPush() {
     return;
   }
 
+  // Android 8+: notifications only pop as a heads-up banner (with sound) if they
+  // belong to a HIGH-importance channel. Create it so pushes "drop down" even
+  // when the app is closed. Matches the channelId the backend sends.
+  if (Capacitor.getPlatform() === 'android') {
+    try {
+      await PushNotifications.createChannel({
+        id: 'waslney_default',
+        name: 'Waslney Alerts',
+        description: 'Trip, booking and ride notifications',
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+        lights: true,
+      });
+    } catch (e) {
+      console.warn('createChannel failed:', e?.message);
+    }
+  }
+
   // Attach listeners once.
   if (!wired) {
     wired = true;
