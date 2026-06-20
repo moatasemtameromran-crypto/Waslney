@@ -1,2106 +1,906 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import { PlaceSearch as AreaSearch } from '../../components/LeafletSearch.jsx';
 import { useAuth } from '../../App.jsx';
+import * as api from '../../api.js';
+import * as tenderApi from '../../api_tender.js';
+import { C, WaslneyLogo, Tabs, Topbar, Badge, StatCard, DetailRow, CapBar, CapBarLabeled, Stars, Inp, Sel, btnPrimary, btnSm, btnDanger, card, fmtDate, Spinner, sectSt, Avatar } from '../../components/UI.jsx';
+import { AdminMap, StopPicker } from '../../components/TripMap.jsx';
+import socket_module, { connectSocket } from '../../socket.js';
 
-const API = (path) => `/api${path}`;
-const token = () => localStorage.getItem('shuttle_token');
-const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
-
-async function apiFetch(path, opts = {}) {
-  const res = await fetch(API(path), { headers: authHeaders(), ...opts });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed');
-  return res.json();
-}
-
-// ── Colour palette ───────────────────────────────────────────────────────────
-const C = {
-  bg: '#eef1f6',
-  white: '#fff',
-  blue: '#0065ff',
-  blueLight: '#e6f0ff',
-  sidebar: '#fff',
-  border: '#e0e7ff',
-  text: '#1e293b',
-  muted: '#6b7280',
-  green: '#22c55e',
-  red: '#ef4444',
-  orange: '#f97316',
-  purple: '#8b5cf6',
-  yellow: '#eab308',
-};
-
-// ── Tiny reusable components ─────────────────────────────────────────────────
-const Btn = ({ children, onClick, variant = 'primary', small, style, disabled }) => {
-  const base = { cursor: disabled ? 'not-allowed' : 'pointer', border: 'none', borderRadius: 6, fontWeight: 600, padding: small ? '6px 14px' : '9px 20px', fontSize: small ? 13 : 14, transition: 'opacity .15s', opacity: disabled ? 0.6 : 1 };
-  const variants = {
-    primary: { background: C.blue, color: '#fff' },
-    danger:  { background: C.red, color: '#fff' },
-    ghost:   { background: C.blueLight, color: C.blue },
-    outline: { background: 'transparent', border: `1px solid ${C.border}`, color: C.text },
-    success: { background: C.green, color: '#fff' },
-  };
-  return <button style={{ ...base, ...variants[variant], ...style }} onClick={onClick} disabled={disabled}>{children}</button>;
-};
-
-const Input = ({ label, value, onChange, type = 'text', placeholder, style, readOnly }) => (
-  <div style={{ marginBottom: 12 }}>
-    {label && <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4, color: C.text }}>{label}</label>}
-    <input
-      type={type} value={value || ''} onChange={e => onChange && onChange(e.target.value)}
-      placeholder={placeholder} readOnly={readOnly}
-      style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 14, outline: 'none', background: readOnly ? '#f8fafc' : '#fff', fontFamily: 'Poppins, sans-serif', ...style }}
-    />
-  </div>
-);
-
-const Select = ({ label, value, onChange, options, style }) => (
-  <div style={{ marginBottom: 12 }}>
-    {label && <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4, color: C.text }}>{label}</label>}
-    <select value={value || ''} onChange={e => onChange(e.target.value)}
-      style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 14, background: C.white, fontFamily: 'Poppins, sans-serif', ...style }}>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  </div>
-);
-
-const Card = ({ children, style }) => (
-  <div style={{ background: C.white, borderRadius: 10, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,.06)', border: `1px solid ${C.border}`, ...style }}>{children}</div>
-);
-
-const Table = ({ columns, data, onEdit, onDelete, extraActions }) => (
-  <div style={{ overflowX: 'auto' }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-      <thead>
-        <tr style={{ background: '#f8fafc' }}>
-          {columns.map(c => <th key={c.key} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: `1px solid ${C.border}`, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{c.label}</th>)}
-          {(onEdit || onDelete || extraActions) && <th style={{ padding: '10px 12px', textAlign: 'left', borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>Action</th>}
-        </tr>
-      </thead>
-      <tbody>
-        {!data.length && <tr><td colSpan={columns.length + 1} style={{ padding: '32px', textAlign: 'center', color: C.muted }}>No data found</td></tr>}
-        {data.map((row, i) => (
-          <tr key={row.id || i} style={{ borderBottom: `1px solid ${C.border}` }}>
-            {columns.map(c => <td key={c.key} style={{ padding: '10px 12px', color: C.text }}>{c.render ? c.render(row) : String(row[c.key] ?? '—')}</td>)}
-            {(onEdit || onDelete || extraActions) && (
-              <td style={{ padding: '10px 12px' }}>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {onEdit && <Btn small variant="ghost" onClick={() => onEdit(row)}>Edit</Btn>}
-                  {extraActions && extraActions(row)}
-                  {onDelete && <Btn small variant="danger" onClick={() => onDelete(row)}>Delete</Btn>}
-                </div>
-              </td>
-            )}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
-
-const Badge = ({ label, color }) => (
-  <span style={{ background: color + '22', color, padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, display: 'inline-block' }}>{label}</span>
-);
-
-const statusBadge = (s) => {
-  if (!s) return null;
-  const color = s === 'active' ? C.green : s === 'inactive' ? C.muted : s === 'rejected' ? C.red : s === 'pending_review' ? C.orange : C.muted;
-  return <Badge label={s} color={color} />;
-};
-
-const Modal = ({ title, children, onClose, wide }) => (
-  <div style={{ position: 'fixed', inset: 0, background: '#00000066', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-    <div style={{ background: C.white, borderRadius: 12, padding: 28, width: wide ? 700 : 540, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px #0003' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.text }}>{title}</h3>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: C.muted }}>×</button>
-      </div>
-      {children}
-    </div>
-  </div>
-);
-
-const StatCard = ({ label, value, color = C.blue, icon }) => (
-  <div style={{ background: C.white, borderRadius: 10, padding: '18px 20px', flex: 1, minWidth: 140, boxShadow: '0 1px 4px rgba(0,0,0,.06)', border: `1px solid ${C.border}` }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-      <div>
-        <div style={{ color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
-        <div style={{ fontSize: 28, fontWeight: 700, color }}>{value ?? 0}</div>
-      </div>
-      {icon && <div style={{ background: color + '18', borderRadius: 8, padding: '8px', fontSize: 20 }}>{icon}</div>}
-    </div>
-  </div>
-);
-
-// ── useCrud hook ──────────────────────────────────────────────────────────────
-function useCrud(endpoint) {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const load = useCallback(() => {
-    setLoading(true);
-    apiFetch(endpoint).then(d => setItems(Array.isArray(d) ? d : [])).catch(e => setError(e.message)).finally(() => setLoading(false));
-  }, [endpoint]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const create = async (body) => { const r = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) }); load(); return r; };
-  const update = async (id, body) => { const r = await apiFetch(`${endpoint}/${id}`, { method: 'PUT', body: JSON.stringify(body) }); load(); return r; };
-  const remove = async (id) => { await apiFetch(`${endpoint}/${id}`, { method: 'DELETE' }); load(); };
-
-  return { items, loading, error, load, create, update, remove };
-}
-
-// ── Leaflet map hook ──────────────────────────────────────────────────────────
-function useLeafletMap(ref, options = {}) {
-  const mapRef = useRef(null);
-
-  const init = useCallback((center = [30.0626, 31.2497], zoom = 11) => {
-    if (!ref.current || mapRef.current) return;
-    import('leaflet').then(L => {
-      const Lf = L.default || L;
-      const map = Lf.map(ref.current, { center, zoom });
-      Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors', maxZoom: 19,
-      }).addTo(map);
-      mapRef.current = map;
-      setTimeout(() => map.invalidateSize(), 200);
-      if (options.onInit) options.onInit(map, Lf);
-    });
-  }, []);
-
-  const destroy = useCallback(() => {
-    if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
-  }, []);
-
-  return { mapInstance: mapRef, init, destroy };
-}
-
-// ── SVG Bar Chart ─────────────────────────────────────────────────────────────
-function BarChart({ data, valueKey, labelKey, color = C.blue, height = 160, label = '' }) {
-  if (!data || !data.length) return null;
-  const max = Math.max(...data.map(d => Number(d[valueKey]) || 0), 1);
+// ── Full-screen photo lightbox ─────────────────────────────────────────────
+function Lightbox({ src, label, onClose }) {
+  if (!src) return null;
   return (
-    <div>
-      {label && <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>{label}</div>}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height, padding: '0 4px' }}>
-        {data.map((d, i) => {
-          const val = Number(d[valueKey]) || 0;
-          const h = Math.max(3, (val / max) * (height - 28));
-          return (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-              <div style={{ fontSize: 10, color: C.muted, fontWeight: 600 }}>{val > 0 ? val : ''}</div>
-              <div title={`${d[labelKey]}: ${val}`} style={{ width: '100%', height: h, background: `linear-gradient(180deg, ${color}cc, ${color})`, borderRadius: '4px 4px 0 0', transition: 'height .3s', cursor: 'default' }} />
-              <div style={{ fontSize: 10, color: C.muted, textAlign: 'center', overflow: 'hidden', maxWidth: 44, whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                {String(d[labelKey]).slice(-5)}
+    <div
+      onClick={onClose}
+      style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div style={{ position:'absolute', top:20, right:24, cursor:'pointer', color:'#fff', fontSize:28, lineHeight:1 }} onClick={onClose}>✕</div>
+      <p style={{ color:'#888', fontSize:12, marginBottom:16, letterSpacing:'.08em', textTransform:'uppercase' }}>{label}</p>
+      <img
+        src={src}
+        alt={label}git add Dockerfile
+
+        style={{ maxWidth:'90vw', maxHeight:'80vh', objectFit:'contain', borderRadius:12, border:'1px solid #222' }}
+        onClick={e => e.stopPropagation()}
+      />
+      <a href={src} target="_blank" rel="noreferrer"
+        style={{ marginTop:16, color:'#fbbf24', fontSize:13, textDecoration:'none' }}
+        onClick={e => e.stopPropagation()}>
+        ↗ Open in new tab
+      </a>
+
+      {/* ── TENDER MODAL ── */}
+      {tenderModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={e => { if(e.target===e.currentTarget) setTenderModal(null); }}>
+          <div style={{ background:'#0d0d0d', border:'1px solid rgba(251,191,36,0.3)', borderRadius:20, padding:28, width:'100%', maxWidth:480, boxShadow:'0 24px 80px rgba(0,0,0,0.9)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+              <span style={{ fontSize:28 }}>🏷</span>
+              <div>
+                <div style={{ fontSize:18, fontWeight:800, color:'#fff' }}>Offer for Tender</div>
+                <div style={{ fontSize:12, color:'#666', marginTop:2 }}>Bus companies will bid — lowest price wins</div>
+              </div>
+              <button onClick={() => setTenderModal(null)} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'#555', fontSize:22, cursor:'pointer', lineHeight:1 }}>×</button>
+            </div>
+
+            <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.15)', borderRadius:10, padding:'10px 14px', margin:'14px 0', fontSize:13, color:'#fbbf24', fontWeight:600 }}>
+              📍 {tenderModal.fromLoc} → {tenderModal.toLoc}
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+              <div>
+                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Date *</label>
+                <input type="date" value={tenderForm.ends_date} min={new Date().toISOString().slice(0,10)}
+                  onChange={e => setTenderForm({...tenderForm, ends_date:e.target.value})}
+                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Time *</label>
+                <input type="time" value={tenderForm.ends_time}
+                  onChange={e => setTenderForm({...tenderForm, ends_time:e.target.value})}
+                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+                />
               </div>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
-// ── SVG Donut Chart ───────────────────────────────────────────────────────────
-function DonutChart({ segments, size = 140 }) {
-  const r = 50, cx = 70, cy = 70;
-  const circumference = 2 * Math.PI * r;
-  const total = segments.reduce((s, x) => s + (x.value || 0), 0) || 1;
-  let offset = 0;
-  const arcs = segments.map(seg => {
-    const len = ((seg.value || 0) / total) * circumference;
-    const arc = { ...seg, offset, len };
-    offset += len;
-    return arc;
-  });
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-      <svg width={size} height={size} viewBox="0 0 140 140">
-        {arcs.map((arc, i) => (
-          <circle key={i} cx={cx} cy={cy} r={r}
-            fill="none" stroke={arc.color} strokeWidth={22}
-            strokeDasharray={`${arc.len} ${circumference - arc.len}`}
-            strokeDashoffset={-arc.offset}
-            style={{ transform: 'rotate(-90deg)', transformOrigin: `${cx}px ${cy}px` }} />
-        ))}
-        <text x={cx} y={cy - 6} textAnchor="middle" style={{ fontSize: 18, fontWeight: 700, fill: C.text }}>{total}</text>
-        <text x={cx} y={cy + 12} textAnchor="middle" style={{ fontSize: 10, fill: C.muted }}>Total</text>
-      </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {segments.map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-            <span style={{ color: C.muted }}>{s.label}</span>
-            <span style={{ fontWeight: 700, color: C.text, marginLeft: 'auto' }}>{s.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+            <div style={{ marginBottom:14 }}>
+              <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Notes for companies (optional)</label>
+              <input value={tenderForm.description}
+                onChange={e => setTenderForm({...tenderForm, description:e.target.value})}
+                placeholder="e.g. A/C required, min 20 seats…"
+                style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+              />
+            </div>
 
-// ════════════════════════════════════════════════════════════════════════════
-// PAGE COMPONENTS
-// ════════════════════════════════════════════════════════════════════════════
-
-// ── Dashboard ─────────────────────────────────────────────────────────────────
-function DashboardPage() {
-  const [stats, setStats] = useState(null);
-  const [period, setPeriod] = useState('today');
-  const [loading, setLoading] = useState(true);
-  const adminMapRef = useRef(null);
-  const adminLeafletMap = useRef(null);
-  const adminPins = useRef({});
-
-  useEffect(() => {
-    setLoading(true);
-    apiFetch(`/admin/dashboard?period=${period}`)
-      .then(setStats).catch(() => {}).finally(() => setLoading(false));
-  }, [period]);
-
-  // Live admin map
-  useEffect(() => {
-    if (!adminMapRef.current || adminLeafletMap.current) return;
-    import('leaflet').then(L => {
-      const Lf = L.default || L;
-      const map = Lf.map(adminMapRef.current, { center: [30.0626, 31.2497], zoom: 11 });
-      Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
-      adminLeafletMap.current = map;
-      apiFetch('/location/all').then(locs => {
-        if (!Array.isArray(locs)) return;
-        locs.forEach(d => {
-          if (!d.lat || !d.lng) return;
-          const icon = Lf.divIcon({
-            html: `<div style="background:#0065ff;color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)">🚐 ${d.driver_name || 'Driver'}</div>`,
-            className: '', iconAnchor: [0, 0],
-          });
-          adminPins.current[d.driver_id] = Lf.marker([parseFloat(d.lat), parseFloat(d.lng)], { icon }).addTo(map).bindPopup(`${d.driver_name}`);
-        });
-      }).catch(() => {});
-      setTimeout(() => map.invalidateSize(), 300);
-    });
-    return () => { if (adminLeafletMap.current) { adminLeafletMap.current.remove(); adminLeafletMap.current = null; } };
-  }, []);
-
-  const periods = ['today', '7d', '30d'];
-  const periodLabel = { today: 'Today', '7d': 'Last 7 Days', '30d': 'Last 30 Days' };
-
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.text }}>Dashboard</h2>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {periods.map(p => (
-            <button key={p} onClick={() => setPeriod(p)}
-              style={{ padding: '6px 14px', borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', fontSize: 13,
-                background: period === p ? C.blue : C.white, color: period === p ? '#fff' : C.text, fontWeight: 600 }}>
-              {periodLabel[p]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? <p style={{ color: C.muted }}>Loading…</p> : stats && (
-        <>
-          {/* Stat cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-            <StatCard label="Total Bookings"  value={stats.total_bookings}   color={C.blue}   icon="📋" />
-            <StatCard label="Booked"          value={stats.booked_bookings}  color={C.green}  icon="✅" />
-            <StatCard label="Cancelled"       value={stats.cancelled_bookings} color={C.red}  icon="❌" />
-            <StatCard label="Completed"       value={stats.completed_bookings} color={C.purple} icon="🏁" />
-            <StatCard label="Total Earning"   value={`${stats.total_earning?.toFixed(0)} EGP`} color={C.green} icon="💰" />
-            <StatCard label="New Users"       value={stats.new_users}        color={C.orange} icon="👤" />
-            <StatCard label="Active Trips"    value={stats.active_trips}     color={C.blue}   icon="🚐" />
-            <StatCard label="Missed"          value={stats.missed_bookings}  color={C.orange} icon="⏰" />
-          </div>
-
-          {/* Charts row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-            {/* Revenue chart */}
-            {stats.revenue_chart?.length > 0 && (
-              <Card>
-                <BarChart data={stats.revenue_chart} valueKey="revenue" labelKey="date" color={C.blue} label="Revenue — Last 7 Days (EGP)" height={180} />
-              </Card>
+            {tenderErr && (
+              <div style={{ fontSize:12, color:'#f87171', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'8px 12px', marginBottom:12 }}>
+                ⚠ {tenderErr}
+              </div>
             )}
 
-            {/* Bookings status donut */}
-            <Card>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>Bookings Breakdown</div>
-              <DonutChart segments={[
-                { label: 'Booked',    value: stats.booked_bookings    || 0, color: C.green },
-                { label: 'Cancelled', value: stats.cancelled_bookings || 0, color: C.red },
-                { label: 'Completed', value: stats.completed_bookings || 0, color: C.purple },
-                { label: 'Active',    value: stats.active_bookings    || 0, color: C.blue },
-              ]} />
-            </Card>
-          </div>
-
-          {/* New users bar */}
-          {stats.revenue_chart?.length > 0 && (
-            <Card style={{ marginBottom: 20 }}>
-              <BarChart data={stats.revenue_chart} valueKey="new_users" labelKey="date" color={C.orange} label="New Users — Last 7 Days" height={140} />
-            </Card>
-          )}
-        </>
-      )}
-
-      {/* Live map */}
-      <Card>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>Live Driver Locations</div>
-        <div style={{ position: 'relative', height: 360, borderRadius: 8, overflow: 'hidden' }}>
-          <div ref={adminMapRef} style={{ height: '100%', width: '100%' }} />
-        </div>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>🚐 Active drivers shown on map</div>
-      </Card>
-
-      {/* Leaflet CSS */}
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    </div>
-  );
-}
-
-// ── Stops page with Leaflet map ───────────────────────────────────────────────
-function StopsPage() {
-  const { items, loading, create, update, remove, load } = useCrud('/shuttle/stops');
-  const [modal, setModal] = useState(null);  // 'add' | 'edit' | 'map'
-  const [form, setForm] = useState({});
-  const [mapMode, setMapMode] = useState(false);
-
-  // Map refs
-  const mapDivRef = useRef(null);
-  const leafletMap = useRef(null);
-  const markersRef = useRef([]);
-  const clickMarker = useRef(null);
-
-  const openAdd = () => { setForm({ status: 'active', radius: 100 }); setModal('add'); };
-  const openEdit = (row) => { setForm({ ...row }); setModal('edit'); };
-
-  const save = async () => {
-    if (!form.name) { alert('Name is required'); return; }
-    if (!form.lat || !form.lng) { alert('Latitude and longitude are required'); return; }
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  // Init stops map
-  const initStopsMap = useCallback(() => {
-    if (!mapDivRef.current || leafletMap.current) return;
-    import('leaflet').then(L => {
-      const Lf = L.default || L;
-      const map = Lf.map(mapDivRef.current, { center: [30.0626, 31.2497], zoom: 11 });
-      Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
-      leafletMap.current = map;
-
-      // Add existing stops
-      items.forEach(stop => {
-        if (!stop.lat || !stop.lng) return;
-        const color = stop.status === 'active' ? '#22c55e' : '#6b7280';
-        const icon = Lf.divIcon({
-          html: `<div style="background:${color};color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3)">${stop.name}</div>`,
-          className: '', iconAnchor: [0, 0],
-        });
-        markersRef.current.push(
-          Lf.marker([parseFloat(stop.lat), parseFloat(stop.lng)], { icon })
-            .addTo(map)
-            .bindPopup(`<b>${stop.name}</b><br/>${stop.address || ''}<br/>Radius: ${stop.radius}m`)
-        );
-      });
-
-      if (markersRef.current.length > 1) {
-        const group = Lf.featureGroup(markersRef.current);
-        map.fitBounds(group.getBounds(), { padding: [40, 40] });
-      }
-
-      // Click to place new stop
-      map.on('click', (e) => {
-        const { lat, lng } = e.latlng;
-        if (clickMarker.current) map.removeLayer(clickMarker.current);
-        const icon = Lf.divIcon({
-          html: `<div style="background:#0065ff;color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3)">📍 New stop</div>`,
-          className: '', iconAnchor: [0, 0],
-        });
-        clickMarker.current = Lf.marker([lat, lng], { icon }).addTo(map).bindPopup('Click "Add Here" to create a stop').openPopup();
-
-        // Open add modal with pre-filled lat/lng
-        setForm({ status: 'active', radius: 100, lat: lat.toFixed(6), lng: lng.toFixed(6) });
-        setModal('add');
-      });
-
-      setTimeout(() => map.invalidateSize(), 300);
-    });
-  }, [items]);
-
-  useEffect(() => {
-    if (mapMode) {
-      setTimeout(initStopsMap, 50);
-    } else {
-      if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; markersRef.current = []; clickMarker.current = null; }
-    }
-    return () => {
-      if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; }
-    };
-  }, [mapMode]);
-
-  return (
-    <div>
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Stops Management</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Btn variant={mapMode ? 'primary' : 'outline'} small onClick={() => setMapMode(v => !v)}>
-            {mapMode ? '📋 Table View' : '🗺️ Map View'}
-          </Btn>
-          <Btn onClick={openAdd}>+ Add Stop</Btn>
-        </div>
-      </div>
-
-      {/* Map view */}
-      {mapMode && (
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>
-            🟢 Active stops shown as green labels · Click anywhere on the map to add a new stop
-          </div>
-          <div ref={mapDivRef} style={{ height: 480, borderRadius: 8, overflow: 'hidden' }} />
-        </Card>
-      )}
-
-      {/* Table view */}
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <p style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>{items.length} Results Found</p>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'address', label: 'Stop Location' },
-              { key: 'lat', label: 'Latitude', render: r => r.lat ? parseFloat(r.lat).toFixed(5) : '—' },
-              { key: 'lng', label: 'Longitude', render: r => r.lng ? parseFloat(r.lng).toFixed(5) : '—' },
-              { key: 'radius', label: 'Radius', render: r => `${r.radius || 100}m` },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete stop?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Stop' : 'Edit Stop'} onClose={() => { setModal(null); if (clickMarker.current && leafletMap.current) { leafletMap.current.removeLayer(clickMarker.current); clickMarker.current = null; } }}>
-          <StopPickerModal form={form} setForm={setForm} />
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <Input label="Radius (meters)" {...f('radius')} type="number" />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Stop picker modal (embedded mini-map + form) ──────────────────────────────
-function StopPickerModal({ form, setForm }) {
-  const mapRef = useRef(null);
-  const leafletMap = useRef(null);
-  const marker = useRef(null);
-
-  useEffect(() => {
-    if (!mapRef.current || leafletMap.current) return;
-    import('leaflet').then(L => {
-      const Lf = L.default || L;
-      const lat = parseFloat(form.lat) || 30.0626;
-      const lng = parseFloat(form.lng) || 31.2497;
-      const map = Lf.map(mapRef.current, { center: [lat, lng], zoom: form.lat ? 15 : 11 });
-      Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
-      leafletMap.current = map;
-
-      const icon = Lf.divIcon({ html: `<div style="width:16px;height:16px;border-radius:50%;background:#0065ff;border:3px solid #fff;box-shadow:0 0 8px #0065ff88"></div>`, iconSize: [16, 16], iconAnchor: [8, 8], className: '' });
-
-      if (form.lat && form.lng) {
-        marker.current = Lf.marker([lat, lng], { icon, draggable: true }).addTo(map);
-        marker.current.on('dragend', e => {
-          const p = e.target.getLatLng();
-          setForm(prev => ({ ...prev, lat: p.lat.toFixed(6), lng: p.lng.toFixed(6) }));
-        });
-      }
-
-      map.on('click', e => {
-        const { lat: la, lng: ln } = e.latlng;
-        if (marker.current) map.removeLayer(marker.current);
-        marker.current = Lf.marker([la, ln], { icon, draggable: true }).addTo(map);
-        marker.current.on('dragend', ev => {
-          const p = ev.target.getLatLng();
-          setForm(prev => ({ ...prev, lat: p.lat.toFixed(6), lng: p.lng.toFixed(6) }));
-        });
-        setForm(prev => ({ ...prev, lat: la.toFixed(6), lng: ln.toFixed(6) }));
-      });
-
-      setTimeout(() => map.invalidateSize(), 200);
-    });
-    return () => { if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; } };
-  }, []);
-
-  return (
-    <>
-      <Input label="Stop Name *" value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g. Main Street Stop" />
-      <Input label="Address" value={form.address} onChange={v => setForm(p => ({ ...p, address: v }))} placeholder="Street address" />
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: C.text }}>Location — click map to place pin</label>
-        <div ref={mapRef} style={{ height: 260, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 8 }} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <Input label="Latitude" value={form.lat} onChange={v => setForm(p => ({ ...p, lat: v }))} type="number" placeholder="30.0626" />
-          <Input label="Longitude" value={form.lng} onChange={v => setForm(p => ({ ...p, lng: v }))} type="number" placeholder="31.2497" />
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── Routes ───────────────────────────────────────────────────────────────────
-function RoutesPage() {
-  const { items, loading, create, update, remove } = useCrud('/shuttle/routes');
-  const { items: stops } = useCrud('/shuttle/stops');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-  const [selectedStops, setSelectedStops] = useState([]);
-
-  const openAdd = () => { setForm({ status: 'active', customer_fare: 0, driver_fare: 0 }); setSelectedStops([]); setModal('add'); };
-  const openEdit = (row) => { setForm(row); setSelectedStops((row.stops || []).map(s => s.id)); setModal('edit'); };
-  const save = async () => {
-    const body = { ...form, stop_ids: selectedStops };
-    if (modal === 'add') await create(body); else await update(form.id, body);
-    setModal(null);
-  };
-  const toggleStop = (id) => setSelectedStops(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Routes Management</h2>
-        <Btn onClick={openAdd}>+ Add Route</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Route' },
-              { key: 'stop_count', label: 'Stops' },
-              { key: 'customer_fare', label: 'Customer Fare' },
-              { key: 'driver_fare', label: 'Driver Fare' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete route?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Route' : 'Edit Route'} onClose={() => setModal(null)} wide>
-          <RouteMapPreview stops={stops} selectedStops={selectedStops} />
-          <Input label="Route Name *" {...f('name')} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Customer Fare" {...f('customer_fare')} type="number" />
-            <Input label="Driver Fare" {...f('driver_fare')} type="number" />
-          </div>
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 8, color: C.text }}>Select Stops (in order)</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxHeight: 140, overflowY: 'auto', padding: 4 }}>
-              {stops.map(s => (
-                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', background: selectedStops.includes(s.id) ? C.blueLight : '#f8fafc', padding: '5px 10px', borderRadius: 6, border: `1px solid ${selectedStops.includes(s.id) ? C.blue : C.border}`, color: selectedStops.includes(s.id) ? C.blue : C.text }}>
-                  <input type="checkbox" checked={selectedStops.includes(s.id)} onChange={() => toggleStop(s.id)} style={{ accentColor: C.blue }} />
-                  {s.name}
-                </label>
-              ))}
-            </div>
-            {selectedStops.length > 0 && <p style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>{selectedStops.length} stop(s) selected</p>}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Route map preview (inside modal) ─────────────────────────────────────────
-function RouteMapPreview({ stops, selectedStops }) {
-  const mapRef = useRef(null);
-  const leafletMap = useRef(null);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; }
-    import('leaflet').then(L => {
-      const Lf = L.default || L;
-      const map = Lf.map(mapRef.current, { center: [30.0626, 31.2497], zoom: 11, zoomControl: false });
-      Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
-      leafletMap.current = map;
-
-      const selected = stops.filter(s => selectedStops.includes(s.id) && s.lat && s.lng);
-      const bounds = [];
-      selected.forEach((s, i) => {
-        const icon = Lf.divIcon({ html: `<div style="background:#0065ff;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 2px 6px #0065ff66">${i + 1}</div>`, iconSize: [22, 22], iconAnchor: [11, 11], className: '' });
-        Lf.marker([parseFloat(s.lat), parseFloat(s.lng)], { icon }).addTo(map).bindPopup(s.name);
-        bounds.push([parseFloat(s.lat), parseFloat(s.lng)]);
-      });
-      if (bounds.length > 1) {
-        Lf.polyline(bounds, { color: C.blue, weight: 3, dashArray: '8,5' }).addTo(map);
-        map.fitBounds(bounds, { padding: [30, 30] });
-      }
-      setTimeout(() => map.invalidateSize(), 200);
-    });
-    return () => { if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; } };
-  }, [selectedStops, stops]);
-
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: C.text }}>Route Preview Map</label>
-      <div ref={mapRef} style={{ height: 200, borderRadius: 8, border: `1px solid ${C.border}` }} />
-    </div>
-  );
-}
-
-// ── Vehicles ──────────────────────────────────────────────────────────────────
-function VehiclesPage() {
-  const { items, loading, create, update, remove } = useCrud('/shuttle/vehicles');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const openAdd = () => { setForm({ status: 'active', seats: 20, doors: 2, total_rows: 5, total_columns: 4 }); setModal('add'); };
-  const openEdit = (row) => { setForm(row); setModal('edit'); };
-  const save = async () => {
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Vehicle</h2>
-        <Btn onClick={openAdd}>+ Add Vehicle</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'vehicle_type_name', label: 'Vehicle Type' },
-              { key: 'brand', label: 'Brand' },
-              { key: 'model_name', label: 'Model Name' },
-              { key: 'vehicle_number', label: 'Vehicle Number' },
-              { key: 'seats', label: 'Seats' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete vehicle?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Vehicle' : 'Edit Vehicle'} onClose={() => setModal(null)}>
-          <Input label="Brand *" {...f('brand')} />
-          <Input label="Model Name *" {...f('model_name')} />
-          <Input label="Vehicle Number *" {...f('vehicle_number')} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Seats" {...f('seats')} type="number" />
-            <Input label="Doors" {...f('doors')} type="number" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Total Rows" {...f('total_rows')} type="number" />
-            <Input label="Total Columns" {...f('total_columns')} type="number" />
-          </div>
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Vehicle Types ─────────────────────────────────────────────────────────────
-function VehicleTypesPage() {
-  const { items, loading, create, update, remove } = useCrud('/vehicle-types');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const openAdd = () => { setForm({ status: 'active' }); setModal('add'); };
-  const openEdit = (row) => { setForm(row); setModal('edit'); };
-  const save = async () => {
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Vehicle Type</h2>
-        <Btn onClick={openAdd}>+ Add Vehicle Type</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Vehicle Name' },
-              { key: 'ride_type', label: 'Ride Type' },
-              { key: 'vehicle_type', label: 'Vehicle Type' },
-              { key: 'seats', label: 'Seats' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete vehicle type?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Vehicle Type' : 'Edit Vehicle Type'} onClose={() => setModal(null)}>
-          <Input label="Vehicle Name *" {...f('name')} />
-          <Select label="Ride Type" {...f('ride_type')} options={[{ value: '', label: 'Select' }, { value: 'shuttle', label: 'Shuttle' }, { value: 'on_demand', label: 'On Demand' }]} />
-          <Select label="Vehicle Type" {...f('vehicle_type')} options={[{ value: '', label: 'Select' }, { value: 'bus', label: 'Bus' }, { value: 'hiace', label: 'Hiace' }, { value: 'coaster', label: 'Coaster' }, { value: 'car', label: 'Car' }]} />
-          <Input label="Seats" {...f('seats')} type="number" />
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Fares ─────────────────────────────────────────────────────────────────────
-function FaresPage() {
-  const { items, loading, create, update, remove } = useCrud('/shuttle/fares');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const openAdd = () => { setForm({ status: 'active', fare_type: 'fare_per_km', base_fare: 0, fare_per_stop: 0, fare_per_km: 0 }); setModal('add'); };
-  const openEdit = (row) => { setForm(row); setModal('edit'); };
-  const save = async () => {
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Fare</h2>
-        <Btn onClick={openAdd}>+ Add Fare</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'Fare ID' },
-              { key: 'fare_type', label: 'Type' },
-              { key: 'base_fare', label: 'Base Fare' },
-              { key: 'fare_per_stop', label: 'Fare Per Stop' },
-              { key: 'fare_per_km', label: 'Fare Per Km' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete fare?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Fare' : 'Edit Fare'} onClose={() => setModal(null)}>
-          <Select label="Fare Type *" {...f('fare_type')} options={[{ value: 'fare_per_km', label: 'Fare Per Km' }, { value: 'fare_per_stop', label: 'Fare Per Stop' }, { value: 'flat', label: 'Flat' }]} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Base Fare" {...f('base_fare')} type="number" />
-            <Input label="Fare Per Km" {...f('fare_per_km')} type="number" />
-          </div>
-          <Input label="Fare Per Stop" {...f('fare_per_stop')} type="number" />
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Trips page with map ───────────────────────────────────────────────────────
-function TripsPage() {
-  const { items, loading, create, update, remove } = useCrud('/shuttle/trips');
-  const { items: routes } = useCrud('/shuttle/routes');
-  const { items: vehicles } = useCrud('/shuttle/vehicles');
-  const { items: stops } = useCrud('/shuttle/stops');
-  const [drivers, setDrivers] = useState([]);
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-  const [weekDays, setWeekDays] = useState([]);
-  const [mapTrip, setMapTrip] = useState(null); // trip to show on map
-
-  useEffect(() => { apiFetch('/users/drivers').then(d => setDrivers(Array.isArray(d) ? d : [])).catch(() => {}); }, []);
-
-  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-  const openAdd = () => { setForm({ status: 'active' }); setWeekDays([]); setModal('add'); };
-  const openEdit = (row) => { setForm(row); setWeekDays(row.week_days ? String(row.week_days).split(',') : []); setModal('edit'); };
-  const save = async () => {
-    if (!form.route_id || !form.start_time) { alert('Route and start time required'); return; }
-    const body = { ...form, week_days: weekDays };
-    if (modal === 'add') await create(body); else await update(form.id, body);
-    setModal(null);
-  };
-  const toggleDay = (d) => setWeekDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  // Get stops for a given route
-  const getRouteStops = (routeId) => {
-    const route = routes.find(r => r.id == routeId);
-    if (!route || !route.stops) return stops.slice(0, 4); // fallback
-    return route.stops.map(rs => stops.find(s => s.id === rs.id)).filter(Boolean);
-  };
-
-  return (
-    <div>
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Trip</h2>
-        <Btn onClick={openAdd}>+ Add Trip</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'route_name', label: 'Route' },
-              { key: 'start_time', label: 'Start Time' },
-              { key: 'vehicle_name', label: 'Vehicle' },
-              { key: 'driver_name', label: 'Driver' },
-              { key: 'week_days', label: 'Days' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete trip?')) remove(r.id); }}
-            extraActions={r => (
-              <Btn small variant="ghost" onClick={() => setMapTrip(r)}>🗺️ Map</Btn>
-            )}
-          />
-        </Card>
-      )}
-
-      {/* Trip map modal */}
-      {mapTrip && (
-        <Modal title={`Trip Map — ${mapTrip.route_name || 'Route'}`} onClose={() => setMapTrip(null)} wide>
-          <TripRouteMap trip={mapTrip} stops={getRouteStops(mapTrip.route_id)} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-            <Btn variant="outline" onClick={() => setMapTrip(null)}>Close</Btn>
-          </div>
-        </Modal>
-      )}
-
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Trip' : 'Edit Trip'} onClose={() => setModal(null)}>
-          <Select label="Select Route *" {...f('route_id')} options={[{ value: '', label: 'Select route' }, ...routes.map(r => ({ value: r.id, label: r.name }))]} />
-          <Input label="Start Time *" {...f('start_time')} placeholder="HH:MM" />
-          <Select label="Select Vehicle" {...f('vehicle_id')} options={[{ value: '', label: 'Select vehicle' }, ...vehicles.map(v => ({ value: v.id, label: `${v.model_name} (${v.vehicle_number})` }))]} />
-          <Select label="Driver" {...f('driver_id')} options={[{ value: '', label: 'Select driver' }, ...drivers.map(d => ({ value: d.id, label: d.name }))]} />
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 8, color: C.text }}>Week Days *</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {DAYS.map(d => (
-                <button key={d} onClick={() => toggleDay(d)} style={{
-                  padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                  background: weekDays.includes(d) ? C.blue : C.blueLight,
-                  color: weekDays.includes(d) ? '#fff' : C.blue, border: 'none',
-                }}>{d.slice(0, 3)}</button>
-              ))}
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={launchTender} disabled={tenderBusy} style={{
+                flex:1, background: tenderBusy?'#1a1a1a':'#fbbf24', color: tenderBusy?'#555':'#000',
+                border:'none', borderRadius:12, padding:'14px', cursor: tenderBusy?'default':'pointer',
+                fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:700,
+              }}>
+                {tenderBusy ? 'Launching…' : '⚡ Launch Tender'}
+              </button>
+              <button onClick={() => setTenderModal(null)} style={{ background:'transparent', color:'#555', border:'1px solid #222', borderRadius:12, padding:'14px 18px', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13 }}>
+                Cancel
+              </button>
             </div>
           </div>
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
+        </div>
       )}
+
     </div>
   );
 }
 
-// ── Trip route map component ──────────────────────────────────────────────────
-function TripRouteMap({ trip, stops }) {
-  const mapRef = useRef(null);
-  const leafletMap = useRef(null);
-
-  useEffect(() => {
-    if (!mapRef.current || leafletMap.current) return;
-    import('leaflet').then(L => {
-      const Lf = L.default || L;
-      const map = Lf.map(mapRef.current, { center: [30.0626, 31.2497], zoom: 11 });
-      Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
-      leafletMap.current = map;
-
-      const validStops = stops.filter(s => s && s.lat && s.lng);
-      const bounds = [];
-
-      validStops.forEach((s, i) => {
-        const isFirst = i === 0, isLast = i === validStops.length - 1;
-        const color = isFirst ? '#22c55e' : isLast ? '#ef4444' : C.blue;
-        const icon = Lf.divIcon({
-          html: `<div style="background:${color};color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-shadow:0 2px 8px ${color}88">${i + 1}</div>`,
-          iconSize: [24, 24], iconAnchor: [12, 12], className: '',
-        });
-        Lf.marker([parseFloat(s.lat), parseFloat(s.lng)], { icon })
-          .addTo(map)
-          .bindPopup(`<b>${i + 1}. ${s.name}</b>${s.address ? '<br/>' + s.address : ''}${isFirst ? '<br/>🟢 Start' : isLast ? '<br/>🔴 End' : ''}`);
-        bounds.push([parseFloat(s.lat), parseFloat(s.lng)]);
-      });
-
-      if (bounds.length > 1) {
-        Lf.polyline(bounds, { color: C.blue, weight: 3, opacity: 0.8 }).addTo(map);
-        map.fitBounds(bounds, { padding: [40, 40] });
-      }
-      setTimeout(() => map.invalidateSize(), 200);
-    });
-    return () => { if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; } };
-  }, []);
-
+// ── Document thumbnail ─────────────────────────────────────────────────────
+function DocThumb({ label, url, onView }) {
+  const isImage = url && (url.startsWith('data:image') || url.startsWith('http') || url.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i));
   return (
-    <>
-      <div style={{ background: C.blueLight, borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
-        <strong>{trip.route_name}</strong> · {trip.start_time} · {trip.week_days} · Driver: {trip.driver_name || '—'}
-      </div>
-      <div ref={mapRef} style={{ height: 380, borderRadius: 8, border: `1px solid ${C.border}` }} />
-      {stops.length > 0 && (
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {stops.map((s, i) => s && (
-            <span key={i} style={{ background: i === 0 ? '#dcfce7' : i === stops.length - 1 ? '#fee2e2' : C.blueLight, color: i === 0 ? '#16a34a' : i === stops.length - 1 ? '#dc2626' : C.blue, padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
-              {i + 1}. {s.name}
+    <div>
+      <div style={{ fontSize:11, color:C.text3, marginBottom:6 }}>{label}</div>
+      {!url ? (
+        <div style={{ background:C.bg3, border:`1px solid ${C.redBorder}`, borderRadius:8, padding:'14px 10px', textAlign:'center', fontSize:12, color:C.red }}>
+          ⚠ Not uploaded
+        </div>
+      ) : isImage ? (
+        <div style={{ position:'relative', cursor:'pointer' }} onClick={() => onView(url, label)}>
+          <img src={url} alt={label}
+            style={{ width:'100%', height:120, objectFit:'cover', borderRadius:8, border:`1px solid ${C.border}`, display:'block' }} />
+          <div style={{ position:'absolute', inset:0, borderRadius:8, background:'rgba(0,0,0,0)', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .15s' }}
+            onMouseEnter={e => e.currentTarget.style.background='rgba(0,0,0,0.5)'}
+            onMouseLeave={e => e.currentTarget.style.background='rgba(0,0,0,0)'}>
+            <span style={{ color:'#fff', fontSize:22, opacity:0 }}
+              onMouseEnter={e => { e.currentTarget.style.opacity=1; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity=0; }}>
+              🔍
             </span>
-          ))}
+          </div>
+          <button onClick={() => onView(url, label)}
+            style={{ marginTop:6, width:'100%', background:C.bg3, border:`1px solid ${C.border}`, borderRadius:6, padding:'5px', color:C.text2, fontSize:11, cursor:'pointer', fontFamily:"'Sora',sans-serif" }}>
+            View full size
+          </button>
         </div>
-      )}
-    </>
-  );
-}
-
-// ── Booking Analytics ─────────────────────────────────────────────────────────
-function BookingsAnalyticsPage() {
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-
-  const load = useCallback(() => {
-    setLoading(true);
-    const q = new URLSearchParams();
-    if (startDate) q.set('start_date', startDate);
-    if (endDate) q.set('end_date', endDate);
-    apiFetch(`/admin/dashboard/bookings?${q}`).then(setBookings).catch(() => {}).finally(() => setLoading(false));
-  }, [startDate, endDate]);
-
-  useEffect(() => { load(); }, []);
-
-  const exportCSV = () => {
-    if (!bookings.length) return;
-    const keys = Object.keys(bookings[0]);
-    const csv = [keys.join(','), ...bookings.map(r => keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = 'bookings.csv'; a.click();
-  };
-
-  // Daily revenue chart data
-  const dailyData = Object.values(bookings.reduce((acc, b) => {
-    const d = b.travel_date?.slice(0, 10) || '';
-    if (!acc[d]) acc[d] = { date: d, revenue: 0, count: 0 };
-    acc[d].revenue += parseFloat(b.effective_price) || 0;
-    acc[d].count += 1;
-    return acc;
-  }, {})).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Bookings Analytics</h2>
-        <Btn small variant="outline" onClick={exportCSV}>Export CSV</Btn>
-      </div>
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <Input label="Start Date" value={startDate} onChange={setStartDate} type="date" style={{ width: 160 }} />
-          <Input label="End Date" value={endDate} onChange={setEndDate} type="date" style={{ width: 160 }} />
-          <Btn onClick={load} style={{ marginBottom: 12 }}>Filter</Btn>
-        </div>
-      </Card>
-
-      {dailyData.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          <Card><BarChart data={dailyData} valueKey="revenue" labelKey="date" color={C.blue} label="Revenue per Day (EGP)" height={180} /></Card>
-          <Card><BarChart data={dailyData} valueKey="count" labelKey="date" color={C.green} label="Bookings per Day" height={180} /></Card>
+      ) : (
+        <div style={{ background:C.bg3, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px', fontSize:11, color:C.text2, wordBreak:'break-all' }}>
+          <a href={url} target="_blank" rel="noreferrer" style={{ color:C.yellow||'#fbbf24' }}>↗ Open document</a>
         </div>
       )}
 
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'booking_id', label: 'Booking ID' },
-              { key: 'passenger_name', label: 'Passenger' },
-              { key: 'passenger_phone', label: 'Phone' },
-              { key: 'from_loc', label: 'From' },
-              { key: 'to_loc', label: 'To' },
-              { key: 'travel_date', label: 'Date', render: r => r.travel_date?.slice(0, 10) },
-              { key: 'seats', label: 'Seats' },
-              { key: 'effective_price', label: 'Price' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={bookings}
-          />
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ── Cancellation policies ─────────────────────────────────────────────────────
-function CancellationPage() {
-  const { items, loading, create, update, remove } = useCrud('/cancellation/policies');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const openAdd = () => { setForm({ status: 'active', cancellation_type: 'percentage', driver_charge: 0, passenger_charge: 0 }); setModal('add'); };
-  const openEdit = (row) => { setForm(row); setModal('edit'); };
-  const save = async () => {
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Cancellation Policy</h2>
-        <Btn onClick={openAdd}>+ Add Policy</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Policy Name' },
-              { key: 'cancellation_type', label: 'Type' },
-              { key: 'driver_charge', label: 'Driver Charge' },
-              { key: 'passenger_charge', label: 'Passenger Charge' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete policy?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Cancellation Policy' : 'Edit Policy'} onClose={() => setModal(null)}>
-          <Input label="Policy Name *" {...f('name')} />
-          <Select label="Cancellation Type" {...f('cancellation_type')} options={[{ value: 'percentage', label: 'Percentage' }, { value: 'flat', label: 'Flat Fee' }]} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Driver Charge" {...f('driver_charge')} type="number" />
-            <Input label="Passenger Charge" {...f('passenger_charge')} type="number" />
-          </div>
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Cancellation Reasons ──────────────────────────────────────────────────────
-function CancellationReasonsPage() {
-  const { items, loading, create, update, remove } = useCrud('/cancellation/reasons');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const openAdd = () => { setForm({ status: 'active', user_type: 'passenger' }); setModal('add'); };
-  const openEdit = (row) => { setForm(row); setModal('edit'); };
-  const save = async () => {
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Cancellation Reasons</h2>
-        <Btn onClick={openAdd}>+ Add Reason</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'reason', label: 'Reason' },
-              { key: 'user_type', label: 'User Type' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete reason?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Reason' : 'Edit Reason'} onClose={() => setModal(null)}>
-          <Input label="Reason *" {...f('reason')} />
-          <Select label="User Type" {...f('user_type')} options={[{ value: 'passenger', label: 'Passenger' }, { value: 'driver', label: 'Driver' }, { value: 'both', label: 'Both' }]} />
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Promotions ────────────────────────────────────────────────────────────────
-function PromotionsPage() {
-  const { items, loading, create, update, remove } = useCrud('/promotions');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const openAdd = () => { setForm({ status: 'active', promo_type: 'flat', discount_value: 0, discount_percentage: 0 }); setModal('add'); };
-  const openEdit = (row) => { setForm(row); setModal('edit'); };
-  const save = async () => {
-    if (!form.title || !form.promo_code) { alert('Title and promo code required'); return; }
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Promotions</h2>
-        <Btn onClick={openAdd}>+ Create New Promotion</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'title', label: 'Title' },
-              { key: 'promo_code', label: 'Promo Code' },
-              { key: 'promo_type', label: 'Type' },
-              { key: 'discount_value', label: 'Discount Value' },
-              { key: 'discount_percentage', label: 'Discount %' },
-              { key: 'end_date', label: 'End Date', render: r => r.end_date?.slice(0, 10) || '—' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={openEdit}
-            onDelete={r => { if (window.confirm('Delete promotion?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Create Promotion' : 'Edit Promotion'} onClose={() => setModal(null)}>
-          <Input label="Title *" {...f('title')} />
-          <Input label="Promo Code *" {...f('promo_code')} placeholder="e.g. SAVE20" />
-          <Select label="Promo Type" {...f('promo_type')} options={[{ value: 'flat', label: 'Flat Discount' }, { value: 'percentage', label: 'Percentage' }]} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Discount Value" {...f('discount_value')} type="number" />
-            <Input label="Discount %" {...f('discount_percentage')} type="number" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Start Date" {...f('start_date')} type="date" />
-            <Input label="End Date" {...f('end_date')} type="date" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Max Per User" {...f('max_per_user')} type="number" />
-            <Input label="Total Limit" {...f('total_limit')} type="number" />
-          </div>
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Suggested Routes ──────────────────────────────────────────────────────────
-function SuggestedRoutesPage() {
-  const { items, loading, remove } = useCrud('/suggested-routes');
-
-  const exportCSV = () => {
-    if (!items.length) return;
-    const keys = ['id', 'user_name', 'user_phone', 'pickup_address', 'dropoff_address', 'shift_description'];
-    const csv = [keys.join(','), ...items.map(r => keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = 'suggested_routes.csv'; a.click();
-  };
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Suggested Routes</h2>
-        <Btn small variant="outline" onClick={exportCSV}>Export CSV</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'Route ID' },
-              { key: 'user_name', label: 'User Name' },
-              { key: 'user_phone', label: 'Phone Number' },
-              { key: 'pickup_address', label: 'Pickup Address' },
-              { key: 'dropoff_address', label: 'Drop Address' },
-              { key: 'shift_description', label: 'Shift Description' },
-            ]}
-            data={items}
-            onDelete={r => { if (window.confirm('Delete suggested route?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ── Holiday ───────────────────────────────────────────────────────────────────
-function HolidayPage() {
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [holidays, setHolidays] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    apiFetch(`/holidays?year=${year}&month=${month}`).then(setHolidays).catch(() => {}).finally(() => setLoading(false));
-  }, [year, month]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const getDays = () => {
-    const days = []; const d = new Date(year, month - 1, 1);
-    while (d.getMonth() === month - 1) { days.push(new Date(d)); d.setDate(d.getDate() + 1); }
-    return days;
-  };
-  const isHoliday = (date) => holidays.some(h => h.holiday_date === date.toISOString().slice(0, 10));
-  const toggleHoliday = async (date) => {
-    const dateStr = date.toISOString().slice(0, 10);
-    const existing = holidays.find(h => h.holiday_date === dateStr);
-    if (existing) await apiFetch(`/holidays/${existing.id}`, { method: 'DELETE' });
-    else await apiFetch('/holidays', { method: 'POST', body: JSON.stringify({ holiday_date: dateStr }) });
-    load();
-  };
-
-  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Holiday List</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select value={year} onChange={e => setYear(+e.target.value)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 13 }}>
-            {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select value={month} onChange={e => setMonth(+e.target.value)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 13 }}>
-            {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-          </select>
-        </div>
-      </div>
-      <Card>
-        <h3 style={{ margin: '0 0 16px', color: C.text }}>{MONTHS[month-1]} {year}</h3>
-        {loading ? <p>Loading…</p> : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-            {DAYS_SHORT.map(d => <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: C.muted, padding: 6 }}>{d}</div>)}
-            {Array.from({ length: new Date(year, month-1, 1).getDay() }).map((_, i) => <div key={`e${i}`} />)}
-            {getDays().map(date => {
-              const holiday = isHoliday(date);
-              return (
-                <div key={date.toISOString()} onClick={() => toggleHoliday(date)}
-                  style={{ textAlign: 'center', padding: '10px 4px', borderRadius: 6, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
-                    background: holiday ? C.red : C.blueLight, color: holiday ? '#fff' : C.text, fontWeight: holiday ? 700 : 400,
-                    border: `1px solid ${holiday ? C.red : C.border}` }}>
-                  {date.getDate()}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <p style={{ color: C.muted, fontSize: 12, marginTop: 12 }}>Click a day to mark/unmark as holiday (red)</p>
-      </Card>
-    </div>
-  );
-}
-
-// ── Shuttle Pass ──────────────────────────────────────────────────────────────
-function ShuttlePassPage() {
-  const { items, loading, create, update, remove } = useCrud('/shuttle/passes');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const save = async () => {
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Shuttle Pass</h2>
-        <Btn onClick={() => { setForm({ status: 'active', validity_days: 30, fare_discount: 0 }); setModal('add'); }}>+ Create New Pass</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'Pass ID' },
-              { key: 'name', label: 'Pass Name' },
-              { key: 'pass_type', label: 'Pass Type' },
-              { key: 'fare_discount', label: 'Discount %' },
-              { key: 'validity_days', label: 'Validity (days)' },
-              { key: 'total_pass_limit', label: 'Total Limit' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-              { key: 'recommended', label: 'Recommended', render: r => r.recommended ? <Badge label="Yes" color={C.green} /> : '—' },
-            ]}
-            data={items}
-            onEdit={r => { setForm(r); setModal('edit'); }}
-            onDelete={r => { if (window.confirm('Delete pass?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Create Pass' : 'Edit Pass'} onClose={() => setModal(null)}>
-          <Input label="Pass Name *" {...f('name')} />
-          <Select label="Pass Type" {...f('pass_type')} options={[{ value: '', label: 'Select' }, { value: 'morning', label: 'Morning' }, { value: 'evening', label: 'Evening' }, { value: 'both', label: 'Morning & Evening' }]} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Fare Discount (%)" {...f('fare_discount')} type="number" />
-            <Input label="Validity (days)" {...f('validity_days')} type="number" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Total Pass Limit" {...f('total_pass_limit')} type="number" />
-            <Input label="Per User Limit" {...f('per_user_pass_limit')} type="number" />
-          </div>
-          <Input label="Per User Cancellation Limit" {...f('per_user_cancellation_limit')} type="number" />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
-            <input type="checkbox" checked={!!form.recommended} onChange={e => setForm(p => ({ ...p, recommended: e.target.checked ? 1 : 0 }))} style={{ accentColor: C.blue }} />
-            Recommended
-          </label>
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Customers ─────────────────────────────────────────────────────────────────
-function RidersPage() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    apiFetch('/users').then(data => setUsers((Array.isArray(data) ? data : []).filter(u => u.role === 'passenger'))).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  const filtered = users.filter(u => !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.phone?.includes(search));
-
-  const exportCSV = () => {
-    if (!users.length) return;
-    const keys = ['id', 'name', 'phone', 'account_status', 'created_at'];
-    const csv = [keys.join(','), ...users.map(r => keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = 'customers.csv'; a.click();
-  };
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Customer</h2>
-        <Btn small variant="outline" onClick={exportCSV}>Export CSV</Btn>
-      </div>
-      <Card style={{ marginBottom: 12 }}>
-        <Input placeholder="Search by name or phone…" value={search} onChange={setSearch} style={{ marginBottom: 0 }} />
-      </Card>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <p style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>{filtered.length} customers</p>
-          <Table
-            columns={[
-              { key: 'id', label: 'Customer ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'phone', label: 'Phone' },
-              { key: 'account_status', label: 'Status', render: r => statusBadge(r.account_status) },
-              { key: 'created_at', label: 'Registered', render: r => r.created_at?.slice(0, 10) },
-            ]}
-            data={filtered}
-          />
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ── Drivers ───────────────────────────────────────────────────────────────────
-function DriversPage() {
-  const [drivers, setDrivers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-
-  const load = () => {
-    setLoading(true);
-    apiFetch('/users/drivers/all').then(d => setDrivers(Array.isArray(d) ? d : [])).catch(() => {}).finally(() => setLoading(false));
-  };
-  useEffect(() => { load(); }, []);
-
-  const approve = async (id) => {
-    await apiFetch(`/users/${id}/approve`, { method: 'POST' });
-    setDrivers(prev => prev.map(d => d.id === id ? { ...d, account_status: 'active' } : d));
-  };
-  const reject = async (id) => {
-    const note = window.prompt('Rejection reason (optional):');
-    if (note === null) return;
-    await apiFetch(`/users/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) });
-    setDrivers(prev => prev.map(d => d.id === id ? { ...d, account_status: 'rejected' } : d));
-  };
-
-  const filtered = drivers.filter(d => !search || d.name?.toLowerCase().includes(search.toLowerCase()) || d.phone?.includes(search));
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Driver</h2>
-        <div style={{ display: 'flex', gap: 8, fontSize: 12, color: C.muted }}>
-          <span style={{ color: C.green }}>● {drivers.filter(d=>d.account_status==='active').length} active</span>
-          <span style={{ color: C.orange }}>● {drivers.filter(d=>d.account_status==='pending_review').length} pending</span>
-          <span style={{ color: C.red }}>● {drivers.filter(d=>d.account_status==='rejected').length} rejected</span>
-        </div>
-      </div>
-      <Card style={{ marginBottom: 12 }}>
-        <Input placeholder="Search by name or phone…" value={search} onChange={setSearch} style={{ marginBottom: 0 }} />
-      </Card>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'phone', label: 'Phone' },
-              { key: 'car', label: 'Car' },
-              { key: 'plate', label: 'Plate' },
-              { key: 'account_status', label: 'Status', render: r => statusBadge(r.account_status) },
-              { key: 'avg_rating', label: 'Rating', render: r => `★ ${Number(r.avg_rating||0).toFixed(1)}` },
-              { key: 'total_trips', label: 'Trips' },
-            ]}
-            data={filtered}
-            extraActions={r => r.account_status === 'pending_review' && <>
-              <Btn small variant="success" onClick={() => approve(r.id)}>Approve</Btn>
-              <Btn small variant="danger" onClick={() => reject(r.id)}>Reject</Btn>
-            </>}
-          />
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ── Delete Account Requests ───────────────────────────────────────────────────
-function DeleteRequestsPage() {
-  const { items, loading, load } = useCrud('/delete-requests');
-
-  const approve = async (id) => {
-    if (!window.confirm('Approve and delete this user account?')) return;
-    await apiFetch(`/delete-requests/${id}/approve`, { method: 'PUT' });
-    load();
-  };
-  const reject = async (id) => {
-    await apiFetch(`/delete-requests/${id}/reject`, { method: 'PUT' });
-    load();
-  };
-
-  return (
-    <div>
-      <h2 style={{ margin: '0 0 16px', color: C.text }}>Delete Account Request</h2>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'user_name', label: 'User Name' },
-              { key: 'user_role', label: 'Role' },
-              { key: 'reason', label: 'Reason' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            extraActions={r => r.status === 'pending' && <>
-              <Btn small variant="success" onClick={() => approve(r.id)}>Approve</Btn>
-              <Btn small variant="danger" onClick={() => reject(r.id)}>Reject</Btn>
-            </>}
-          />
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ── Driver Documents ──────────────────────────────────────────────────────────
-function DriverDocumentsPage() {
-  const { items, loading, create, update, remove } = useCrud('/driver-doc-types');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const save = async () => {
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Driver Documents</h2>
-        <Btn onClick={() => { setForm({ status: 'active', num_images: 1, doc_required: 1, gallery_restricted: 0 }); setModal('add'); }}>+ Add Document</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'doc_name', label: 'Document Name' },
-              { key: 'doc_type', label: 'Category' },
-              { key: 'num_images', label: 'Images' },
-              { key: 'doc_required', label: 'Required', render: r => r.doc_required ? <Badge label="Yes" color={C.green} /> : 'No' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={r => { setForm(r); setModal('edit'); }}
-            onDelete={r => { if (window.confirm('Delete document type?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Driver Document' : 'Edit Document'} onClose={() => setModal(null)}>
-          <Input label="Document Name *" {...f('doc_name')} />
-          <Select label="Document Type" {...f('doc_type')} options={[{ value: 'image', label: 'Image' }, { value: 'pdf', label: 'PDF' }, { value: 'both', label: 'Both' }]} />
-          <Input label="Number of Images" {...f('num_images')} type="number" />
-          <Select label="Expired Action" {...f('expired_action')} options={[{ value: 'none', label: 'None' }, { value: 'block', label: 'Block' }, { value: 'notify', label: 'Notify' }]} />
-          {[['gallery_restricted', 'Gallery Restricted'], ['doc_required', 'Document Required'], ['doc_number_required', 'Document Number Required'], ['expiry_required', 'Expiry Date Required']].map(([k, lbl]) => (
-            <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 10 }}>
-              <input type="checkbox" checked={!!form[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.checked ? 1 : 0 }))} style={{ accentColor: C.blue }} />
-              {lbl}
-            </label>
-          ))}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Pushes ────────────────────────────────────────────────────────────────────
-function PushesPage() {
-  const { items, loading, create, update, remove } = useCrud('/pushes');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const save = async () => {
-    if (!form.title || !form.message) { alert('Title and message required'); return; }
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Push Notifications</h2>
-        <Btn onClick={() => { setForm({ user_type: 'all', status: 'draft' }); setModal('add'); }}>+ New Notification</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'title', label: 'Title' },
-              { key: 'message', label: 'Message' },
-              { key: 'user_type', label: 'Target' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-              { key: 'created_at', label: 'Date', render: r => r.created_at?.slice(0, 10) },
-            ]}
-            data={items}
-            onEdit={r => { setForm(r); setModal('edit'); }}
-            onDelete={r => { if (window.confirm('Delete notification?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'New Notification' : 'Edit Notification'} onClose={() => setModal(null)}>
-          <Input label="Title *" {...f('title')} />
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4, color: C.text }}>Message *</label>
-            <textarea value={form.message || ''} onChange={e => setForm(p => ({ ...p, message: e.target.value }))} rows={3}
-              style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 12px', fontSize: 14, fontFamily: 'Poppins, sans-serif', resize: 'vertical' }} />
-          </div>
-          <Select label="Send To" {...f('user_type')} options={[{ value: 'all', label: 'All' }, { value: 'passenger', label: 'Passengers' }, { value: 'driver', label: 'Drivers' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Send</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── General Settings ──────────────────────────────────────────────────────────
-function GeneralSettingsPage() {
-  const [settings, setSettings] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    apiFetch('/admin/settings/general').then(setSettings).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  const save = async () => {
-    await apiFetch('/admin/settings/general', { method: 'PUT', body: JSON.stringify(settings) });
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
-  };
-  const f = (k) => ({ value: settings[k], onChange: v => setSettings(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <h2 style={{ margin: '0 0 20px', color: C.text }}>General Settings</h2>
-      {loading ? <p>Loading…</p> : (
-        <Card style={{ maxWidth: 560 }}>
-          <Input label="Client Name" {...f('client_name')} />
-          <Input label="Support Email" {...f('support_email')} type="email" />
-          <Input label="Brand Logo URL" {...f('brand_logo_url')} />
-          <Input label="Favicon URL" {...f('favicon_url')} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Nearby Stops Count" {...f('nearby_stops_count')} type="number" />
-            <Input label="Max Nearby Distance (m)" {...f('max_nearby_distance')} type="number" />
-          </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <Btn onClick={save}>Save Settings</Btn>
-            {saved && <span style={{ color: C.green, fontSize: 13, fontWeight: 600 }}>✓ Saved</span>}
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ── City Settings ─────────────────────────────────────────────────────────────
-function CitySettingsPage() {
-  const CITY_ID = 1;
-  const [settings, setSettings] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    apiFetch(`/admin/settings/city/${CITY_ID}`).then(setSettings).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  const save = async () => {
-    await apiFetch(`/admin/settings/city/${CITY_ID}`, { method: 'PUT', body: JSON.stringify(settings) });
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
-  };
-  const f = (k) => ({ value: settings[k], onChange: v => setSettings(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <h2 style={{ margin: '0 0 20px', color: C.text }}>City Settings</h2>
-      {loading ? <p>Loading…</p> : (
-        <Card style={{ maxWidth: 560 }}>
-          <Input label="Customer Support Number" {...f('customer_support_number')} />
-          <Input label="Driver Support Number" {...f('driver_support_number')} />
-          <Input label="Emergency Number" {...f('emergency_number')} />
-          <Select label="Service Type" {...f('service_type')} options={[{ value: 'both', label: 'Both' }, { value: 'shuttle', label: 'Shuttle Only' }, { value: 'on_demand', label: 'On Demand Only' }]} />
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <Btn onClick={save}>Save Settings</Btn>
-            {saved && <span style={{ color: C.green, fontSize: 13, fontWeight: 600 }}>✓ Saved</span>}
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ── Manager Settings ──────────────────────────────────────────────────────────
-function ManagerSettingsPage() {
-  const { items, loading, create, update, remove } = useCrud('/managers');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const save = async () => {
-    if (!form.name || !form.email) { alert('Name and email required'); return; }
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Manager Settings</h2>
-        <Btn onClick={() => { setForm({ status: 'active' }); setModal('add'); }}>+ Add Manager</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'email', label: 'Email' },
-              { key: 'phone', label: 'Phone' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={r => { setForm(r); setModal('edit'); }}
-            onDelete={r => { if (window.confirm('Delete manager?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Manager' : 'Edit Manager'} onClose={() => setModal(null)}>
-          <Input label="Name *" {...f('name')} />
-          <Input label="Email *" {...f('email')} type="email" />
-          <Input label="Phone" {...f('phone')} />
-          {modal === 'add' && <Input label="Password *" {...f('password')} type="password" />}
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Roles ─────────────────────────────────────────────────────────────────────
-function RolesPage() {
-  const { items, loading, create, update, remove } = useCrud('/roles');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const save = async () => {
-    if (!form.name) { alert('Role name required'); return; }
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Roles and Permissions</h2>
-        <Btn onClick={() => { setForm({}); setModal('add'); }}>+ Add Role</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Role Name' },
-              { key: 'description', label: 'Description' },
-            ]}
-            data={items}
-            onEdit={r => { setForm(r); setModal('edit'); }}
-            onDelete={r => { if (window.confirm('Delete role?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Role' : 'Edit Role'} onClose={() => setModal(null)}>
-          <Input label="Role Name *" {...f('name')} />
-          <Input label="Description" {...f('description')} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Operational Cities ────────────────────────────────────────────────────────
-function OperationalCitiesPage() {
-  const { items, loading, create, update, remove } = useCrud('/cities');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const save = async () => {
-    if (!form.name) { alert('City name required'); return; }
-    if (modal === 'add') await create(form); else await update(form.id, form);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>Operational Cities</h2>
-        <Btn onClick={() => { setForm({ status: 'active' }); setModal('add'); }}>+ Add City</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'City Name' },
-              { key: 'country', label: 'Country' },
-              { key: 'geofence_radius', label: 'Geofence (m)' },
-              { key: 'status', label: 'Status', render: r => statusBadge(r.status) },
-            ]}
-            data={items}
-            onEdit={r => { setForm(r); setModal('edit'); }}
-            onDelete={r => { if (window.confirm('Delete city?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add City' : 'Edit City'} onClose={() => setModal(null)}>
-          <Input label="City Name *" {...f('name')} />
-          <Input label="Country" {...f('country')} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Latitude" {...f('lat')} type="number" />
-            <Input label="Longitude" {...f('lng')} type="number" />
-          </div>
-          <Input label="Geofence Radius (m)" {...f('geofence_radius')} type="number" />
-          <Select label="Status" {...f('status')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── HomeScreen Settings ───────────────────────────────────────────────────────
-function HomeScreenPage() {
-  const CITY_ID = 1;
-  const { items, loading, create, update, remove } = useCrud(`/admin/settings/homescreen/${CITY_ID}`);
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-
-  const CATEGORIES = ['Promotions', 'Refer & Earn', 'Verify Documents', "What's New", 'Why Mobility', 'Video'];
-  const save = async () => {
-    const body = { ...form, city_id: CITY_ID };
-    if (modal === 'add') await create(body); else await update(form.id, body);
-    setModal(null);
-  };
-  const f = (k) => ({ value: form[k], onChange: v => setForm(p => ({ ...p, [k]: v })) });
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.text }}>HomeScreen Settings</h2>
-        <Btn onClick={() => { setForm({ active: 1, user_type: 'customer', display_order: 1 }); setModal('add'); }}>+ Add</Btn>
-      </div>
-      {loading ? <p>Loading…</p> : (
-        <Card>
-          <Table
-            columns={[
-              { key: 'category', label: 'Category' },
-              { key: 'display_order', label: 'Display Order' },
-              { key: 'user_type', label: 'User Type' },
-              { key: 'active', label: 'Active', render: r => r.active ? <Badge label="Yes" color={C.green} /> : 'No' },
-            ]}
-            data={items}
-            onEdit={r => { setForm(r); setModal('edit'); }}
-            onDelete={r => { if (window.confirm('Delete item?')) remove(r.id); }}
-          />
-        </Card>
-      )}
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Item' : 'Edit Item'} onClose={() => setModal(null)}>
-          <Select label="Category" {...f('category')} options={CATEGORIES.map(c => ({ value: c, label: c }))} />
-          <Input label="Display Order" {...f('display_order')} type="number" />
-          <Select label="User Type" {...f('user_type')} options={[{ value: 'customer', label: 'Customer' }, { value: 'driver', label: 'Driver' }, { value: 'both', label: 'Both' }]} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
-            <input type="checkbox" checked={!!form.active} onChange={e => setForm(p => ({ ...p, active: e.target.checked ? 1 : 0 }))} style={{ accentColor: C.blue }} />
-            Active
-          </label>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save}>Save</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// SIDEBAR NAVIGATION
-// ════════════════════════════════════════════════════════════════════════════
-const NAV = [
-  { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-  { section: 'Shuttle' },
-  { id: 'stops',               label: 'Stops',               icon: '📍' },
-  { id: 'routes',              label: 'Routes',              icon: '🛤️' },
-  { id: 'vehicles',            label: 'Vehicles',            icon: '🚐' },
-  { id: 'fares',               label: 'Fare',                icon: '💰' },
-  { id: 'trips',               label: 'Trips',               icon: '🗓️' },
-  { id: 'analytics',           label: 'Analytics',           icon: '📈' },
-  { id: 'cancellation',        label: 'Cancellation',        icon: '❌' },
-  { id: 'cancellation-reasons',label: 'Cancellation Reasons',icon: '📋' },
-  { id: 'promotions',          label: 'Promotions',          icon: '🎁' },
-  { id: 'suggested-routes',    label: 'Suggested Routes',    icon: '🗺️' },
-  { id: 'holiday',             label: 'Holiday',             icon: '🏖️' },
-  { id: 'shuttle-pass',        label: 'Shuttle Pass',        icon: '🎫' },
-  { section: 'Users' },
-  { id: 'customers',           label: 'Customer',            icon: '👤' },
-  { id: 'drivers',             label: 'Driver',              icon: '🚗' },
-  { id: 'delete-requests',     label: 'Delete Requests',     icon: '🗑️' },
-  { id: 'driver-documents',    label: 'Driver Documents',    icon: '📄' },
-  { id: 'vehicle-types',       label: 'Vehicle Type',        icon: '🚌' },
-  { section: 'Settings' },
-  { id: 'homescreen',          label: 'HomeScreen',          icon: '📱' },
-  { id: 'pushes',              label: 'Pushes',              icon: '🔔' },
-  { id: 'general-settings',    label: 'General Settings',    icon: '⚙️' },
-  { id: 'city-settings',       label: 'City Settings',       icon: '🏙️' },
-  { id: 'manager-settings',    label: 'Manager Settings',    icon: '👔' },
-  { id: 'roles',               label: 'Roles & Permissions', icon: '🔑' },
-  { id: 'operational-cities',  label: 'Operational Cities',  icon: '🌍' },
-];
-
-const PAGE_MAP = {
-  dashboard:             DashboardPage,
-  stops:                 StopsPage,
-  routes:                RoutesPage,
-  vehicles:              VehiclesPage,
-  fares:                 FaresPage,
-  trips:                 TripsPage,
-  analytics:             BookingsAnalyticsPage,
-  cancellation:          CancellationPage,
-  'cancellation-reasons':CancellationReasonsPage,
-  promotions:            PromotionsPage,
-  'suggested-routes':    SuggestedRoutesPage,
-  holiday:               HolidayPage,
-  'shuttle-pass':        ShuttlePassPage,
-  customers:             RidersPage,
-  drivers:               DriversPage,
-  'delete-requests':     DeleteRequestsPage,
-  'driver-documents':    DriverDocumentsPage,
-  'vehicle-types':       VehicleTypesPage,
-  homescreen:            HomeScreenPage,
-  pushes:                PushesPage,
-  'general-settings':    GeneralSettingsPage,
-  'city-settings':       CitySettingsPage,
-  'manager-settings':    ManagerSettingsPage,
-  roles:                 RolesPage,
-  'operational-cities':  OperationalCitiesPage,
-};
-
-// ════════════════════════════════════════════════════════════════════════════
-// MAIN ADMIN DASHBOARD LAYOUT
-// ════════════════════════════════════════════════════════════════════════════
-export default function AdminDash() {
-  const { user, logout } = useAuth();
-  const [page, setPage] = useState(() => localStorage.getItem('adm_page') || 'dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  const goPage = (id) => { localStorage.setItem('adm_page', id); setPage(id); };
-  const PageComponent = PAGE_MAP[page] || DashboardPage;
-
-  return (
-    <div style={{ fontFamily: "'Poppins', -apple-system, sans-serif", background: C.bg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        body { margin: 0; }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .sidebar-item:hover { background: #f0f4ff !important; }
-      `}</style>
-
-      {/* Top AppBar */}
-      <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, height: 64, display: 'flex', alignItems: 'center', padding: '0 20px', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button onClick={() => setSidebarOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: C.text, padding: 4 }}>☰</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ background: C.blue, borderRadius: 8, padding: '5px 8px', color: '#fff', fontSize: 16 }}>🚐</div>
-            <span style={{ fontWeight: 700, fontSize: 17, color: C.blue, letterSpacing: '-.01em' }}>Waslney Admin</span>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: C.blueLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: C.blue, fontWeight: 700 }}>
-              {user?.name?.[0]?.toUpperCase() || 'A'}
+      {/* ── TENDER MODAL ── */}
+      {tenderModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={e => { if(e.target===e.currentTarget) setTenderModal(null); }}>
+          <div style={{ background:'#0d0d0d', border:'1px solid rgba(251,191,36,0.3)', borderRadius:20, padding:28, width:'100%', maxWidth:480, boxShadow:'0 24px 80px rgba(0,0,0,0.9)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+              <span style={{ fontSize:28 }}>🏷</span>
+              <div>
+                <div style={{ fontSize:18, fontWeight:800, color:'#fff' }}>Offer for Tender</div>
+                <div style={{ fontSize:12, color:'#666', marginTop:2 }}>Bus companies will bid — lowest price wins</div>
+              </div>
+              <button onClick={() => setTenderModal(null)} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'#555', fontSize:22, cursor:'pointer', lineHeight:1 }}>×</button>
             </div>
-            <span style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>{user?.name || 'Admin'}</span>
-          </div>
-          <Btn small variant="outline" onClick={logout}>Logout</Btn>
-        </div>
-      </div>
 
-      <div style={{ display: 'flex', marginTop: 64 }}>
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <div style={{ width: 252, background: C.sidebar, borderRight: `1px solid ${C.border}`, position: 'fixed', top: 64, bottom: 0, left: 0, overflowY: 'auto', zIndex: 999, padding: '10px 0' }}>
-            {NAV.map((item, i) => {
-              if (item.section) return (
-                <div key={i} style={{ padding: '12px 20px 4px', fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.08em' }}>{item.section}</div>
-              );
-              const active = page === item.id;
+            <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.15)', borderRadius:10, padding:'10px 14px', margin:'14px 0', fontSize:13, color:'#fbbf24', fontWeight:600 }}>
+              📍 {tenderModal.fromLoc} → {tenderModal.toLoc}
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+              <div>
+                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Date *</label>
+                <input type="date" value={tenderForm.ends_date} min={new Date().toISOString().slice(0,10)}
+                  onChange={e => setTenderForm({...tenderForm, ends_date:e.target.value})}
+                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Time *</label>
+                <input type="time" value={tenderForm.ends_time}
+                  onChange={e => setTenderForm({...tenderForm, ends_time:e.target.value})}
+                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Notes for companies (optional)</label>
+              <input value={tenderForm.description}
+                onChange={e => setTenderForm({...tenderForm, description:e.target.value})}
+                placeholder="e.g. A/C required, min 20 seats…"
+                style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+              />
+            </div>
+
+            {tenderErr && (
+              <div style={{ fontSize:12, color:'#f87171', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'8px 12px', marginBottom:12 }}>
+                ⚠ {tenderErr}
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={launchTender} disabled={tenderBusy} style={{
+                flex:1, background: tenderBusy?'#1a1a1a':'#fbbf24', color: tenderBusy?'#555':'#000',
+                border:'none', borderRadius:12, padding:'14px', cursor: tenderBusy?'default':'pointer',
+                fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:700,
+              }}>
+                {tenderBusy ? 'Launching…' : '⚡ Launch Tender'}
+              </button>
+              <button onClick={() => setTenderModal(null)} style={{ background:'transparent', color:'#555', border:'1px solid #222', borderRadius:12, padding:'14px 18px', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+export default function AdminDash() {
+  const { user, logout, notify } = useAuth();
+  const [tab, setTab] = useState(() => sessionStorage.getItem('adm_tab') || 'overview');
+  const goTab = (t) => { sessionStorage.setItem('adm_tab', t); setTab(t); setEditTrip(null); setViewDriver(null); };
+
+  const [trips,   setTrips]   = useState([]);
+  const [drivers, setDrivers] = useState([]); // active only — for dropdowns
+  const [allDrivers, setAllDrivers] = useState([]); // all statuses — for Drivers tab
+  const [users,   setUsers]   = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [editTrip, setEditTrip] = useState(null);
+  const [stops,    setStops]   = useState([]);
+  const [editStops, setEditStops] = useState([]);
+
+  // ── Tender state ──────────────────────────────────────────────────────────
+  const [tenderModal, setTenderModal] = useState(null); // { tripId, fromLoc, toLoc } or null
+  const [tenderForm, setTenderForm]   = useState({ ends_date:'', ends_time:'', description:'' });
+  const [tenderBusy, setTenderBusy]   = useState(false);
+  const [tenderErr,  setTenderErr]    = useState('');
+
+  // ── Review state ──────────────────────────────────────────────────────────
+  const [pendingDrivers, setPendingDrivers] = useState([]);
+  const [reviewLoading,  setReviewLoading]  = useState(false);
+  const [expandedDriver, setExpandedDriver] = useState(null);
+  const [rejectTarget,   setRejectTarget]   = useState(null);
+  const [rejectNote,     setRejectNote]     = useState('');
+
+  // ── Driver profile view ───────────────────────────────────────────────────
+  const [viewDriver, setViewDriver] = useState(null); // full driver object
+
+  // ── Lightbox ──────────────────────────────────────────────────────────────
+  const [lightbox, setLightbox] = useState(null); // { src, label }
+
+  const [form, setForm] = useState({
+    from_loc:'', to_loc:'', pickup_time:'', dropoff_time:'', date:'', price:'', total_seats:16, driver_id:''
+  });
+  const f = k => e => setForm({ ...form, [k]: e.target.value });
+
+  // ── Track last searched location to pan the StopPicker map ───────────────
+  const [mapCenter, setMapCenter] = useState(null);     // { lat, lng, name } for create form
+  const [editMapCenter, setEditMapCenter] = useState(null); // { lat, lng, name } for edit form
+
+  useEffect(() => {
+    loadAll();
+    loadPendingDrivers();
+    // Connect socket as admin for real-time updates
+    connectSocket(user.id, 'admin');
+    // Trip status changes (driver starts or completes trip)
+    socket_module.on('trip:status:changed', ({ tripId, status }) => {
+      setTrips(prev => prev.map(t => String(t.id) === String(tripId) ? { ...t, status } : t));
+    });
+    // Booking confirmed/cancelled (passenger books)
+    socket_module.on('booking:updated', ({ tripId, bookedSeats }) => {
+      if (bookedSeats !== undefined) {
+        setTrips(prev => prev.map(t => String(t.id) === String(tripId) ? { ...t, booked_seats: bookedSeats } : t));
+      }
+    });
+    return () => {
+      socket_module.off('trip:status:changed');
+      socket_module.off('booking:updated');
+    };
+  }, []);
+  useEffect(() => { if (tab === 'review') loadPendingDrivers(); }, [tab]);
+  useEffect(() => { if (tab === 'drivers') loadAllDrivers(); }, [tab]);
+
+  async function loadAll() {
+    setLoading(true);
+    try {
+      const [t, d, u] = await Promise.all([api.getTrips(), api.getDrivers(), api.getUsers()]);
+      setTrips(t); setDrivers(d); setUsers(u);
+    } catch(e) { notify('Error', e.message, 'error'); }
+    finally { setLoading(false); }
+  }
+
+  async function loadAllDrivers() {
+    try {
+      const rows = await api.getAllDrivers();
+      setAllDrivers(Array.isArray(rows) ? rows : []);
+    } catch(e) { notify('Error', 'Could not load drivers', 'error'); }
+  }
+
+  async function loadPendingDrivers() {
+    setReviewLoading(true);
+    try {
+      const data = await api.getPendingDrivers();
+      setPendingDrivers(Array.isArray(data) ? data : (data.drivers || []));
+    } catch(e) { notify('Error', 'Could not load pending drivers', 'error'); }
+    finally { setReviewLoading(false); }
+  }
+
+  async function handleApprove(id) {
+    try {
+      await api.approveDriver(id);
+      notify('Approved ✅', 'Driver account is now active.');
+      setPendingDrivers(p => p.filter(d => d.id !== id));
+      setExpandedDriver(null);
+      loadAllDrivers();
+    } catch(e) { notify('Error', e.message, 'error'); }
+  }
+
+  async function handleReject(id) {
+    try {
+      await api.rejectDriver(id, rejectNote);
+      notify('Rejected ❌', 'Driver notified.');
+      setPendingDrivers(p => p.filter(d => d.id !== id));
+      setRejectTarget(null); setRejectNote(''); setExpandedDriver(null);
+      loadAllDrivers();
+    } catch(e) { notify('Error', e.message, 'error'); }
+  }
+
+  function openTenderModal(tripId, fromLoc, toLoc) {
+    // Pre-fill deadline to 24h from now
+    const d = new Date(Date.now() + 24*3600*1000);
+    const dateStr = d.toISOString().slice(0,10);
+    const timeStr = d.toTimeString().slice(0,5);
+    setTenderForm({ ends_date: dateStr, ends_time: timeStr, description:'' });
+    setTenderErr('');
+    setTenderModal({ tripId, fromLoc, toLoc });
+  }
+
+  async function launchTender() {
+    if (!tenderForm.ends_date || !tenderForm.ends_time) { setTenderErr('Set deadline date and time'); return; }
+    const endsAt  = new Date(`${tenderForm.ends_date}T${tenderForm.ends_time}`);
+    const minutes = Math.round((endsAt - Date.now()) / 60000);
+    if (minutes < 5) { setTenderErr('Deadline must be at least 5 minutes from now'); return; }
+    setTenderBusy(true); setTenderErr('');
+    try {
+      await tenderApi.createTender(
+        { trip_id: tenderModal.tripId, duration_minutes: minutes, description: tenderForm.description },
+        api.getToken ? api.getToken() : localStorage.getItem('token')
+      );
+      notify('Tender launched! 🏷', `${tenderModal.fromLoc} → ${tenderModal.toLoc} is now open for bids.`);
+      setTenderModal(null);
+      loadAll();
+    } catch(e) { setTenderErr(e.message); }
+    finally { setTenderBusy(false); }
+  }
+
+  async function handleCreate() {
+    const { from_loc, to_loc, pickup_time, date, price } = form;
+    if (!from_loc||!to_loc||!pickup_time||!date||!price) {
+      notify('Incomplete', 'Fill in all required fields.', 'error'); return;
+    }
+    if (stops.length < 2) {
+      notify('Add stops', 'Add at least 1 pickup and 1 drop-off on the map.', 'error'); return;
+    }
+    try {
+      await api.createTrip({ ...form, price: parseFloat(form.price), total_seats: parseInt(form.total_seats)||16, stops });
+      notify('Trip created!', `${from_loc} → ${to_loc} on ${date}`);
+      setForm({ from_loc:'', to_loc:'', pickup_time:'', dropoff_time:'', date:'', price:'', total_seats:16, driver_id:'' });
+      setStops([]);
+      setMapCenter(null);
+      loadAll(); goTab('trips');
+    } catch(e) { notify('Error', e.message, 'error'); }
+  }
+
+  async function handleSaveEdit() {
+    try {
+      await api.updateTrip(editTrip.id, {
+        from_loc: editTrip.from_loc, to_loc: editTrip.to_loc,
+        pickup_time: editTrip.pickup_time, dropoff_time: editTrip.dropoff_time,
+        date: editTrip.date, price: parseFloat(editTrip.price),
+        driver_id: editTrip.driver_id, stops: editStops,
+      });
+      notify('Trip updated', 'Changes saved.');
+      setEditTrip(null); setEditStops([]); setEditMapCenter(null);
+      loadAll();
+    } catch(e) { notify('Error', e.message, 'error'); }
+  }
+
+  async function handleCancel(id) {
+    try {
+      await api.deleteTrip(id);
+      notify('Trip cancelled', 'Passengers notified.');
+      loadAll();
+    } catch(e) { notify('Error', e.message, 'error'); }
+  }
+
+  async function handleDeletePermanent(id) {
+    if (!window.confirm('Permanently delete this trip from the database? This cannot be undone.')) return;
+    try {
+      await api.deleteTripPermanent(id);
+      notify('Trip deleted', 'Trip permanently removed from database.');
+      loadAll();
+    } catch(e) { notify('Error', e.message, 'error'); }
+  }
+
+  const activeCount  = trips.filter(t => t.status==='upcoming'||t.status==='active').length;
+  const totalBooked  = trips.reduce((s,t) => s+(t.booked_seats||0), 0);
+  const passengers   = users.filter(u => u.role==='passenger');
+  const driverUsers  = drivers; // active only, for dropdowns
+
+  // ── Status badge helper ───────────────────────────────────────────────────
+  function statusBadge(s) {
+    if (s === 'active')         return <Badge type="green">Active</Badge>;
+    if (s === 'pending_review') return <Badge type="amber">Pending Review</Badge>;
+    if (s === 'rejected')       return <Badge type="red">Rejected</Badge>;
+    return <Badge type="amber">{s}</Badge>;
+  }
+
+  return (
+    <div style={{ minHeight:'100vh', background:C.bg }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+      {/* Lightbox */}
+      {lightbox && <Lightbox src={lightbox.src} label={lightbox.label} onClose={() => setLightbox(null)} />}
+
+      <Topbar role="admin" name={user?.name || 'Admin'} onLogout={logout} />
+      <div style={{ maxWidth:960, margin:'0 auto', padding:'28px 20px' }}>
+
+        <Tabs tabs={[
+          { id:'overview',   label:'Overview' },
+          { id:'create',     label:'+ Trip' },
+          { id:'trips',      label:'Trips' },
+          { id:'drivers',    label:'Drivers' },
+          { id:'passengers', label:'Passengers' },
+          { id:'review',     label:`📋 Review${pendingDrivers.length > 0 ? ` (${pendingDrivers.length})` : ''}` },
+        ]} active={tab} onSet={goTab} />
+
+        {/* ── OVERVIEW ── */}
+        {tab === 'overview' && (
+          <div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 }}>
+              <StatCard num={activeCount}                                               label="Active trips"   color={C.blue} />
+              <StatCard num={totalBooked}                                               label="Seats booked"   color={C.green} />
+              <StatCard num={allDrivers.filter(d=>d.account_status==='active').length || driverUsers.length} label="Active drivers"  color={C.purple} />
+              <StatCard num={passengers.length}                                         label="Passengers"     color={C.amber} />
+            </div>
+            {pendingDrivers.length > 0 && (
+              <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.2)', borderRadius:10, padding:'14px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}
+                onClick={() => goTab('review')}>
+                <span style={{ fontSize:20 }}>⏳</span>
+                <span style={{ color:'#fbbf24', fontSize:13, fontWeight:600 }}>{pendingDrivers.length} driver{pendingDrivers.length!==1?'s':''} waiting for review</span>
+                <span style={{ marginLeft:'auto', color:'#fbbf24', fontSize:12 }}>Review now →</span>
+              </div>
+            )}
+            <p style={sectSt}>Live driver locations</p>
+            <AdminMap height={340} />
+            <p style={sectSt}>Recent trips</p>
+            {loading && <Spinner />}
+            {trips.slice(0,6).map(t => (
+              <div key={t.id} style={{ ...card, marginBottom:10 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <Badge type={t.status==='completed'?'blue':t.status==='active'?'green':t.status==='cancelled'?'red':'amber'}>{t.status}</Badge>
+                  <span style={{ fontWeight:400 }}>{t.from_loc} → {t.to_loc}</span>
+                  <span style={{ marginLeft:'auto', fontSize:12, color:C.text2 }}>{t.booked_seats||0}/{t.total_seats} seats</span>
+                </div>
+                <CapBar booked={t.booked_seats||0} total={t.total_seats} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── CREATE TRIP ── */}
+        {tab === 'create' && (
+          <div style={card}>
+            <p style={sectSt}>New trip</p>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              <AreaSearch label="📍 Pickup area"   placeholder="e.g. Nasr City…" icon="📍" value={form.from_loc?{name:form.from_loc}:null} onChange={c=>{ setForm({...form,from_loc:c?c.name:''}); if(c?.lat) setMapCenter({lat:c.lat,lng:c.lng,name:c.name}); }} />
+              <AreaSearch label="🏁 Drop-off area" placeholder="e.g. Maadi…"     icon="🏁" value={form.to_loc?{name:form.to_loc}:null}   onChange={c=>{ setForm({...form,to_loc:c?c.name:''}); if(c?.lat) setMapCenter({lat:c.lat,lng:c.lng,name:c.name}); }} />
+              <Inp label="📅 Date"             type="date"   value={form.date}         onChange={f('date')} />
+              <Inp label="🕐 Pickup time"      type="time"   value={form.pickup_time}  onChange={f('pickup_time')} />
+              <Inp label="🕐 Est. drop-off"    type="time"   value={form.dropoff_time} onChange={f('dropoff_time')} />
+              <Inp label="💰 Price/seat (EGP)" type="number" value={form.price}        onChange={f('price')}       placeholder="45" />
+              <Inp label="💺 Total seats"      type="number" value={form.total_seats}  onChange={f('total_seats')} />
+            </div>
+            <Sel label="🚐 Assign driver (optional)" value={form.driver_id} onChange={f('driver_id')}>
+              <option value="">Select active driver…</option>
+              {driverUsers.map(d => <option key={d.id} value={d.id}>{d.name} — {d.plate}</option>)}
+            </Sel>
+            <p style={{ ...sectSt, marginTop:20 }}>🗺️ Set pickup & drop-off points on map</p>
+            <p style={{ fontSize:12, color:C.text3, marginBottom:12 }}>Click map to add pickup 🟢 and drop-off 🔵 points.</p>
+            <StopPicker stops={stops} onChange={setStops} height={340} centerOn={mapCenter} />
+            {/* ── Tender option inside Create ── */}
+            <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.2)', borderRadius:12, padding:'14px 16px', marginTop:8 }}>
+              <div style={{ fontSize:13, fontWeight:600, color:'#fbbf24', marginBottom:4 }}>🏷 Offer this trip for tender instead?</div>
+              <div style={{ fontSize:12, color:'#555', marginBottom:10 }}>Skip assigning a driver — publish the trip for bus companies to bid on.</div>
+              <button
+                onClick={async () => {
+                  const { from_loc, to_loc, date } = form;
+                  if (!from_loc||!to_loc||!date) { notify('Incomplete','Fill from, to, and date first.','error'); return; }
+                  if (stops.length < 2) { notify('Add stops','Add at least 1 pickup and 1 drop-off on the map.','error'); return; }
+                  // Create the trip first (without driver), then open tender modal
+                  try {
+                    const created = await api.createTrip({ ...form, price: parseFloat(form.price)||0, total_seats: parseInt(form.total_seats)||16, stops });
+                    setForm({ from_loc:'', to_loc:'', pickup_time:'', dropoff_time:'', date:'', price:'', total_seats:16, driver_id:'' });
+                    setStops([]); setMapCenter(null);
+                    loadAll();
+                    openTenderModal(created.id || created.trip_id, from_loc, to_loc);
+                  } catch(e) { notify('Error', e.message, 'error'); }
+                }}
+                style={{ background:'rgba(251,191,36,0.12)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.3)', borderRadius:8, padding:'9px 20px', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:600 }}
+              >
+                🏷 Create & offer for tender →
+              </button>
+            </div>
+            <button onClick={handleCreate} style={btnPrimary}>Create trip</button>
+          </div>
+        )}
+
+        {/* ── TRIPS ── */}
+        {tab === 'trips' && !editTrip && (
+          <div>
+            <p style={sectSt}>{trips.length} trips total</p>
+            {loading && <Spinner />}
+            {trips.map(t => {
+              const driver = driverUsers.find(d => d.id === t.driver_id);
               return (
-                <div key={item.id} className="sidebar-item" onClick={() => goPage(item.id)} style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px',
-                  cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400,
-                  background: active ? C.blueLight : 'transparent',
-                  color: active ? C.blue : C.text,
-                  borderLeft: active ? `3px solid ${C.blue}` : '3px solid transparent',
-                  transition: 'all .1s', margin: '1px 0',
-                }}>
-                  <span style={{ fontSize: 15 }}>{item.icon}</span>
-                  <span>{item.label}</span>
+                <div key={t.id} style={{ ...card, marginBottom:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', marginBottom:8 }}>
+                    <Badge type={t.status==='completed'?'blue':t.status==='active'?'green':t.status==='cancelled'?'red':'amber'}>{t.status}</Badge>
+                    <span style={{ marginLeft:'auto', fontSize:11, color:C.text3 }}>{fmtDate(t.date)} · {t.pickup_time}</span>
+                  </div>
+                  <div style={{ fontSize:16, fontWeight:400, marginBottom:4 }}>{t.from_loc} → {t.to_loc}</div>
+                  <div style={{ fontSize:12, color:C.text2, marginBottom:6 }}>
+                    Driver: {t.driver_name||driver?.name||'—'} · {t.driver_plate||driver?.plate||'—'} · {t.price} EGP/seat
+                  </div>
+                  <CapBarLabeled booked={t.booked_seats||0} total={t.total_seats} />
+                  {t.status !== 'cancelled' && t.status !== 'completed' && (
+                    <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
+                      <button onClick={() => { setEditTrip({...t}); setEditStops(t.stops||[]); }} style={btnSm}>Edit</button>
+                      {!['tendered','awarded','assigned'].includes(t.status) && (
+                        <button
+                          onClick={() => openTenderModal(t.id, t.from_loc, t.to_loc)}
+                          style={{ background:'rgba(251,191,36,0.1)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.28)', borderRadius:8, padding:'7px 14px', fontFamily:"'Sora',sans-serif", fontSize:12, cursor:'pointer', fontWeight:600 }}
+                        >
+                          🏷 Offer for tender
+                        </button>
+                      )}
+                      {['tendered'].includes(t.status) && (
+                        <span style={{ fontSize:11, color:'#fbbf24', background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.2)', borderRadius:6, padding:'4px 10px', display:'flex', alignItems:'center', gap:4 }}>⚡ Bidding open</span>
+                      )}
+                      {['awarded','assigned'].includes(t.status) && (
+                        <span style={{ fontSize:11, color:'#34d399', background:'rgba(52,211,153,0.08)', border:'1px solid rgba(52,211,153,0.2)', borderRadius:6, padding:'4px 10px', display:'flex', alignItems:'center', gap:4 }}>🏆 Tender awarded</span>
+                      )}
+                      <button onClick={() => handleCancel(t.id)} style={btnDanger}>Cancel trip</button>
+                      <button onClick={() => handleDeletePermanent(t.id)} style={{ ...btnDanger, background:'rgba(239,68,68,0.18)', border:'1px solid rgba(239,68,68,0.4)' }}>🗑 Delete from DB</button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* Main content */}
-        <div style={{ flex: 1, marginLeft: sidebarOpen ? 252 : 0, padding: '24px 28px', minHeight: 'calc(100vh - 64px)', transition: 'margin .2s' }}>
-          <PageComponent />
-        </div>
+        {/* ── EDIT TRIP ── */}
+        {tab === 'trips' && editTrip && (
+          <div>
+            <button onClick={() => { setEditTrip(null); setEditStops([]); setEditMapCenter(null); }} style={{ ...btnSm, marginBottom:20 }}>← Cancel</button>
+            <div style={card}>
+              <p style={sectSt}>Edit trip #{editTrip.id}</p>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                <AreaSearch label="📍 Pickup area"   icon="📍" value={editTrip.from_loc?{name:editTrip.from_loc}:null} onChange={c=>{ setEditTrip({...editTrip,from_loc:c?c.name:''}); if(c?.lat) setEditMapCenter({lat:c.lat,lng:c.lng,name:c.name}); }} />
+                <AreaSearch label="🏁 Drop-off area" icon="🏁" value={editTrip.to_loc?{name:editTrip.to_loc}:null}   onChange={c=>{ setEditTrip({...editTrip,to_loc:c?c.name:''}); if(c?.lat) setEditMapCenter({lat:c.lat,lng:c.lng,name:c.name}); }} />
+                <Inp label="Date"          type="date"   value={editTrip.date?.slice(0,10)}  onChange={e=>setEditTrip({...editTrip,date:e.target.value})} />
+                <Inp label="Pickup time"   type="time"   value={editTrip.pickup_time}        onChange={e=>setEditTrip({...editTrip,pickup_time:e.target.value})} />
+                <Inp label="Drop-off time" type="time"   value={editTrip.dropoff_time||''}   onChange={e=>setEditTrip({...editTrip,dropoff_time:e.target.value})} />
+                <Inp label="Price (EGP)"   type="number" value={editTrip.price}              onChange={e=>setEditTrip({...editTrip,price:e.target.value})} />
+              </div>
+              <Sel label="Assign driver" value={editTrip.driver_id} onChange={e=>setEditTrip({...editTrip,driver_id:e.target.value})}>
+                {driverUsers.map(d => <option key={d.id} value={d.id}>{d.name} — {d.plate}</option>)}
+              </Sel>
+              <p style={{ ...sectSt, marginTop:16 }}>🗺️ Edit stops</p>
+              <StopPicker stops={editStops} onChange={setEditStops} height={300} centerOn={editMapCenter} />
+              <button onClick={handleSaveEdit} style={btnPrimary}>Save changes</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── DRIVERS TAB ── */}
+        {tab === 'drivers' && !viewDriver && (
+          <div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+              <p style={{ ...sectSt, margin:0 }}>{allDrivers.length} total drivers</p>
+              <div style={{ display:'flex', gap:8, fontSize:12, color:C.text3 }}>
+                <span>🟢 {allDrivers.filter(d=>d.account_status==='active').length} active</span>
+                <span>🟡 {allDrivers.filter(d=>d.account_status==='pending_review').length} pending</span>
+                <span>🔴 {allDrivers.filter(d=>d.account_status==='rejected').length} rejected</span>
+              </div>
+            </div>
+            {allDrivers.length === 0 && <Spinner />}
+            {allDrivers.map(d => (
+              <div key={d.id} style={{ ...card, marginBottom:12, cursor:'pointer', transition:'border-color .15s', borderColor: d.account_status==='pending_review'?'rgba(251,191,36,0.25)': d.account_status==='rejected'?'rgba(248,113,113,0.2)':C.border }}
+                onClick={() => setViewDriver(d)}>
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  {/* Profile photo or avatar */}
+                  {d.profile_photo ? (
+                    <img src={d.profile_photo} alt={d.name}
+                      style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:`2px solid ${d.account_status==='active'?'#4ade80':d.account_status==='pending_review'?'#fbbf24':'#f87171'}`, flexShrink:0 }} />
+                  ) : (
+                    <Avatar name={d.name} size={48}
+                      color={d.account_status==='active'?C.green:d.account_status==='pending_review'?C.amber:C.red}
+                      dim={d.account_status==='active'?C.greenDim:d.account_status==='pending_review'?C.amberDim:C.redDim}
+                      border={d.account_status==='active'?C.greenBorder:d.account_status==='pending_review'?C.amberBorder:C.redBorder} />
+                  )}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:600, fontSize:14 }}>{d.name}</div>
+                    <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>
+                      {d.car} · <span style={{ fontFamily:'monospace' }}>{d.plate}</span>
+                    </div>
+                    <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>
+                      {d.phone} · Joined {fmtDate(d.created_at)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    {statusBadge(d.account_status)}
+                    <div style={{ fontSize:12, color:C.amber, marginTop:6 }}>
+                      ★ {parseFloat(d.avg_rating||0).toFixed(1)} <span style={{ color:C.text3 }}>({d.rating_count||0})</span>
+                    </div>
+                    <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>
+                      {d.completed_trips||0} trips done
+                    </div>
+                  </div>
+                </div>
+                <div style={{ marginTop:10, fontSize:11, color:C.text3 }}>
+                  {d.car_license_photo ? '✅ Docs uploaded' : '⚠ No docs'} · Tap to view full profile →
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── DRIVER PROFILE VIEW ── */}
+        {tab === 'drivers' && viewDriver && (
+          <div>
+            <button onClick={() => setViewDriver(null)} style={{ ...btnSm, marginBottom:20 }}>← Back to drivers</button>
+            <div style={{ ...card, marginBottom:16 }}>
+              {/* Header */}
+              <div style={{ display:'flex', alignItems:'flex-start', gap:16, marginBottom:20 }}>
+                {viewDriver.profile_photo ? (
+                  <div style={{ cursor:'pointer', flexShrink:0 }} onClick={() => setLightbox({ src:viewDriver.profile_photo, label:'Profile Photo' })}>
+                    <img src={viewDriver.profile_photo} alt={viewDriver.name}
+                      style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:`3px solid ${viewDriver.account_status==='active'?'#4ade80':'#fbbf24'}` }} />
+                    <div style={{ textAlign:'center', fontSize:10, color:C.text3, marginTop:4 }}>View photo</div>
+                  </div>
+                ) : (
+                  <Avatar name={viewDriver.name} size={80} />
+                )}
+                <div style={{ flex:1 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+                    <h2 style={{ fontSize:20, fontWeight:700, margin:0 }}>{viewDriver.name}</h2>
+                    {statusBadge(viewDriver.account_status)}
+                  </div>
+                  <div style={{ fontSize:13, color:C.text2, marginBottom:4 }}>{viewDriver.phone}</div>
+                  <div style={{ fontSize:13, color:C.text2, marginBottom:4 }}>
+                    {viewDriver.car} · <span style={{ fontFamily:'monospace', color:C.text }}>{viewDriver.plate}</span>
+                  </div>
+                  <div style={{ fontSize:12, color:C.text3 }}>Joined {fmtDate(viewDriver.created_at)}</div>
+                  {viewDriver.rejection_note && (
+                    <div style={{ marginTop:10, background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#f87171' }}>
+                      <b>Rejection reason:</b> {viewDriver.rejection_note}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20, borderTop:`1px solid ${C.border}`, paddingTop:16 }}>
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontSize:22, fontWeight:300, color:C.blue }}>{viewDriver.total_trips||0}</div>
+                  <div style={{ fontSize:10, color:C.text3, textTransform:'uppercase', letterSpacing:'.06em' }}>Total trips</div>
+                </div>
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontSize:22, fontWeight:300, color:C.green }}>{viewDriver.completed_trips||0}</div>
+                  <div style={{ fontSize:10, color:C.text3, textTransform:'uppercase', letterSpacing:'.06em' }}>Completed</div>
+                </div>
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontSize:22, fontWeight:300, color:C.amber }}>★ {parseFloat(viewDriver.avg_rating||0).toFixed(1)}</div>
+                  <div style={{ fontSize:10, color:C.text3, textTransform:'uppercase', letterSpacing:'.06em' }}>Rating</div>
+                </div>
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontSize:22, fontWeight:300, color:C.text }}>{viewDriver.rating_count||0}</div>
+                  <div style={{ fontSize:10, color:C.text3, textTransform:'uppercase', letterSpacing:'.06em' }}>Reviews</div>
+                </div>
+              </div>
+
+              {/* Documents */}
+              <p style={sectSt}>Documents</p>
+              {viewDriver.submitted_at && (
+                <p style={{ fontSize:12, color:C.text3, marginBottom:12 }}>
+                  Submitted {fmtDate(viewDriver.submitted_at)}
+                  {viewDriver.reviewed_at ? ` · Reviewed ${fmtDate(viewDriver.reviewed_at)}` : ''}
+                </p>
+              )}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, marginBottom:20 }}>
+                <DocThumb label="🚗 Car License"     url={viewDriver.car_license_photo}     onView={(s,l)=>setLightbox({src:s,label:l})} />
+                <DocThumb label="🪪 Driver License"  url={viewDriver.driver_license_photo}  onView={(s,l)=>setLightbox({src:s,label:l})} />
+                <DocThumb label="📄 Criminal Record" url={viewDriver.criminal_record_photo} onView={(s,l)=>setLightbox({src:s,label:l})} />
+              </div>
+
+              {/* Actions for pending drivers only */}
+              {viewDriver.account_status === 'pending_review' && (
+                <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:16 }}>
+                  <p style={{ ...sectSt, marginBottom:12 }}>Review Actions</p>
+                  {rejectTarget === viewDriver.id ? (
+                    <div style={{ background:C.bg3, border:`1px solid ${C.redBorder}`, borderRadius:10, padding:16 }}>
+                      <p style={{ fontSize:13, color:C.red, marginBottom:10, fontWeight:600 }}>Reason for rejection (optional)</p>
+                      <textarea value={rejectNote} onChange={e=>setRejectNote(e.target.value)}
+                        placeholder="e.g. Blurry photo, expired license…"
+                        style={{ width:'100%', boxSizing:'border-box', background:C.bg4, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px', color:C.text, fontFamily:"'Sora',sans-serif", fontSize:13, resize:'none', height:72, outline:'none' }} />
+                      <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                        <button onClick={()=>handleReject(viewDriver.id)} style={{ ...btnDanger, padding:'9px 22px' }}>Confirm Reject</button>
+                        <button onClick={()=>{setRejectTarget(null);setRejectNote('');}} style={btnSm}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', gap:10 }}>
+                      <button onClick={()=>handleApprove(viewDriver.id)} style={{ ...btnPrimary, width:'auto', padding:'11px 32px' }}>✅ Approve Driver</button>
+                      <button onClick={()=>setRejectTarget(viewDriver.id)} style={{ ...btnDanger, padding:'11px 28px' }}>❌ Reject</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── PASSENGERS ── */}
+        {tab === 'passengers' && (
+          <div>
+            <p style={sectSt}>{passengers.length} registered passengers</p>
+            {passengers.map(p => (
+              <div key={p.id} style={{ ...card, marginBottom:10 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <Avatar name={p.name} color={C.blue} dim={C.blueDim} border={C.blueBorder} size={38} />
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:500, fontSize:14 }}>{p.name}</div>
+                    <div style={{ fontSize:12, color:C.text2 }}>{p.phone}</div>
+                  </div>
+                  <div style={{ textAlign:'right', fontSize:12, color:C.text3 }}>Joined {fmtDate(p.created_at)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── DRIVER REVIEW TAB ── */}
+        {tab === 'review' && (
+          <div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+              <p style={{ ...sectSt, margin:0 }}>
+                {pendingDrivers.length} driver{pendingDrivers.length!==1?'s':''} pending review
+              </p>
+              <button onClick={loadPendingDrivers} style={{ ...btnSm, fontSize:11 }}>↻ Refresh</button>
+            </div>
+
+            {reviewLoading && <Spinner />}
+
+            {!reviewLoading && pendingDrivers.length === 0 && (
+              <div style={{ ...card, textAlign:'center', padding:'48px 20px' }}>
+                <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
+                <div style={{ fontWeight:500, marginBottom:6 }}>No drivers pending review</div>
+                <p style={{ color:C.text3, fontSize:13 }}>All applications processed.</p>
+              </div>
+            )}
+
+            {!reviewLoading && pendingDrivers.map(driver => (
+              <div key={driver.id} style={{ ...card, marginBottom:16, border: expandedDriver===driver.id?`1px solid rgba(251,191,36,0.3)`:`1px solid ${C.border}` }}>
+
+                {/* Collapsed header */}
+                <div style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}
+                  onClick={() => setExpandedDriver(expandedDriver===driver.id?null:driver.id)}>
+                  {driver.profile_photo ? (
+                    <img src={driver.profile_photo} alt={driver.name}
+                      style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:'2px solid #fbbf24', flexShrink:0 }} />
+                  ) : (
+                    <Avatar name={driver.name} size={48} />
+                  )}
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:600, fontSize:15 }}>{driver.name}</div>
+                    <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>
+                      {driver.phone} · {driver.car} · <span style={{ fontFamily:'monospace' }}>{driver.plate}</span>
+                    </div>
+                    <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>
+                      Submitted {fmtDate(driver.submitted_at||driver.created_at)}
+                    </div>
+                  </div>
+                  <Badge type="amber">Pending</Badge>
+                  <span style={{ color:C.text3, fontSize:12, marginLeft:8 }}>{expandedDriver===driver.id?'▲':'▼'}</span>
+                </div>
+
+                {/* Expanded */}
+                {expandedDriver === driver.id && (
+                  <div style={{ marginTop:20, borderTop:`1px solid ${C.border}`, paddingTop:20 }}>
+
+                    {/* Profile photo large */}
+                    {driver.profile_photo && (
+                      <div style={{ marginBottom:20 }}>
+                        <p style={sectSt}>Profile Photo</p>
+                        <div style={{ display:'inline-block', cursor:'pointer' }}
+                          onClick={() => setLightbox({ src:driver.profile_photo, label:'Profile Photo' })}>
+                          <img src={driver.profile_photo} alt="Profile"
+                            style={{ height:100, width:100, borderRadius:'50%', objectFit:'cover', border:'2px solid #fbbf24' }} />
+                          <div style={{ textAlign:'center', fontSize:11, color:C.text3, marginTop:4 }}>Click to enlarge</div>
+                        </div>
+                      </div>
+                    )}
+
+                    <p style={sectSt}>Documents</p>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
+                      <DocThumb label="🚗 Car License"     url={driver.car_license_photo}     onView={(s,l)=>setLightbox({src:s,label:l})} />
+                      <DocThumb label="🪪 Driver License"  url={driver.driver_license_photo}  onView={(s,l)=>setLightbox({src:s,label:l})} />
+                      <DocThumb label="📄 Criminal Record" url={driver.criminal_record_photo} onView={(s,l)=>setLightbox({src:s,label:l})} />
+                    </div>
+
+                    {/* Reject / Approve */}
+                    {rejectTarget === driver.id ? (
+                      <div style={{ background:C.bg3, border:`1px solid ${C.redBorder}`, borderRadius:10, padding:16 }}>
+                        <p style={{ fontSize:13, color:C.red, marginBottom:10, fontWeight:600 }}>Reason for rejection (optional)</p>
+                        <textarea value={rejectNote} onChange={e=>setRejectNote(e.target.value)}
+                          placeholder="e.g. Blurry photo, expired license…"
+                          style={{ width:'100%', boxSizing:'border-box', background:C.bg4, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px', color:C.text, fontFamily:"'Sora',sans-serif", fontSize:13, resize:'none', height:72, outline:'none' }} />
+                        <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                          <button onClick={()=>handleReject(driver.id)} style={{ ...btnDanger, padding:'9px 22px' }}>Confirm Reject</button>
+                          <button onClick={()=>{setRejectTarget(null);setRejectNote('');}} style={btnSm}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display:'flex', gap:10 }}>
+                        <button onClick={()=>handleApprove(driver.id)} style={{ ...btnPrimary, width:'auto', padding:'11px 32px' }}>✅ Approve</button>
+                        <button onClick={()=>setRejectTarget(driver.id)} style={{ ...btnDanger, padding:'11px 28px' }}>❌ Reject</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
       </div>
+
+      {/* ── TENDER MODAL ── */}
+      {tenderModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={e => { if(e.target===e.currentTarget) setTenderModal(null); }}>
+          <div style={{ background:'#0d0d0d', border:'1px solid rgba(251,191,36,0.3)', borderRadius:20, padding:28, width:'100%', maxWidth:480, boxShadow:'0 24px 80px rgba(0,0,0,0.9)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+              <span style={{ fontSize:28 }}>🏷</span>
+              <div>
+                <div style={{ fontSize:18, fontWeight:800, color:'#fff' }}>Offer for Tender</div>
+                <div style={{ fontSize:12, color:'#666', marginTop:2 }}>Bus companies will bid — lowest price wins</div>
+              </div>
+              <button onClick={() => setTenderModal(null)} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'#555', fontSize:22, cursor:'pointer', lineHeight:1 }}>×</button>
+            </div>
+
+            <div style={{ background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.15)', borderRadius:10, padding:'10px 14px', margin:'14px 0', fontSize:13, color:'#fbbf24', fontWeight:600 }}>
+              📍 {tenderModal.fromLoc} → {tenderModal.toLoc}
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+              <div>
+                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Date *</label>
+                <input type="date" value={tenderForm.ends_date} min={new Date().toISOString().slice(0,10)}
+                  onChange={e => setTenderForm({...tenderForm, ends_date:e.target.value})}
+                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Deadline Time *</label>
+                <input type="time" value={tenderForm.ends_time}
+                  onChange={e => setTenderForm({...tenderForm, ends_time:e.target.value})}
+                  style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <label style={{ fontSize:11, color:'#666', letterSpacing:'.08em', textTransform:'uppercase', display:'block', marginBottom:5 }}>Notes for companies (optional)</label>
+              <input value={tenderForm.description}
+                onChange={e => setTenderForm({...tenderForm, description:e.target.value})}
+                placeholder="e.g. A/C required, min 20 seats…"
+                style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:8, padding:'11px 12px', color:'#fff', fontFamily:"'Sora',sans-serif", fontSize:13, outline:'none', boxSizing:'border-box' }}
+              />
+            </div>
+
+            {tenderErr && (
+              <div style={{ fontSize:12, color:'#f87171', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'8px 12px', marginBottom:12 }}>
+                ⚠ {tenderErr}
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={launchTender} disabled={tenderBusy} style={{
+                flex:1, background: tenderBusy?'#1a1a1a':'#fbbf24', color: tenderBusy?'#555':'#000',
+                border:'none', borderRadius:12, padding:'14px', cursor: tenderBusy?'default':'pointer',
+                fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:700,
+              }}>
+                {tenderBusy ? 'Launching…' : '⚡ Launch Tender'}
+              </button>
+              <button onClick={() => setTenderModal(null)} style={{ background:'transparent', color:'#555', border:'1px solid #222', borderRadius:12, padding:'14px 18px', cursor:'pointer', fontFamily:"'Sora',sans-serif", fontSize:13 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

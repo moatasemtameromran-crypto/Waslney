@@ -10,14 +10,18 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 -- ── 1. USERS ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS `users` (
-  `id`         INT AUTO_INCREMENT PRIMARY KEY,
-  `name`       VARCHAR(100) NOT NULL,
-  `phone`      VARCHAR(20)  NOT NULL UNIQUE,
-  `password`   VARCHAR(255) NOT NULL,
-  `role`       ENUM('passenger','driver','admin') NOT NULL DEFAULT 'passenger',
-  `car`        VARCHAR(100) DEFAULT NULL,
-  `plate`      VARCHAR(30)  DEFAULT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  `id`            INT AUTO_INCREMENT PRIMARY KEY,
+  `name`          VARCHAR(100) NOT NULL,
+  `phone`         VARCHAR(20)  NOT NULL UNIQUE,
+  `email`         VARCHAR(150) DEFAULT NULL,
+  `password`      VARCHAR(255) NOT NULL,
+  `role`          ENUM('passenger','driver','admin') NOT NULL DEFAULT 'passenger',
+  `car`           VARCHAR(100) DEFAULT NULL,
+  `plate`         VARCHAR(30)  DEFAULT NULL,
+  `profile_photo` LONGTEXT     DEFAULT NULL,
+  `account_status` VARCHAR(30) NOT NULL DEFAULT 'active',
+  `rejection_note` TEXT        DEFAULT NULL,
+  `created_at`    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── 2. TRIPS ─────────────────────────────────────────────────

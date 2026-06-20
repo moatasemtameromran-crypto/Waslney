@@ -1,8 +1,16 @@
 [phases.setup]
-nixPkgs = ["nodejs_22"]
+nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npx --yes pnpm@10 install --no-frozen-lockfile"]
+cmds = [
+  "cd backend && npm install",
+  "cd frontend && npm install"
+]
 
 [phases.build]
-cmds = ["npx pnpm@10 -r --filter '!@workspace/mockup-sandbox' --if-present run build"]
+cmds = [
+  "cd frontend && npm run build"
+]
+
+[start]
+cmd = "node backend/server.js"
