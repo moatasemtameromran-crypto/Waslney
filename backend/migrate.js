@@ -326,6 +326,22 @@ module.exports = async function runMigrations() {
       }
       console.log('✅  Dispatch batch tables ready');
     } catch(e) { console.warn('⚠️  dispatch_batches:', e.message); }
+    // Device tokens for push notifications (FCM)
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS device_tokens (
+          id         INT AUTO_INCREMENT PRIMARY KEY,
+          user_id    INT          NOT NULL,
+          token      VARCHAR(255) NOT NULL UNIQUE,
+          platform   VARCHAR(20)  NOT NULL DEFAULT 'android',
+          created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_user (user_id),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      `);
+      console.log('device_tokens table ready');
+    } catch(e) { console.warn('device_tokens:', e.message); }
 
     console.log('✅  Migrations done');
   } catch (err) {

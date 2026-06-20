@@ -62,6 +62,8 @@ export const getDriverRatings= (id)  => get(`/ratings/driver/${id}`);
 // ── NOTIFICATIONS ─────────────────────────────────────────
 export const getNotifications = ()   => get('/notifications/mine');
 export const markNotifRead    = ()   => put('/notifications/read-all');
+export const registerDevice   = (token, platform) => post('/notifications/register-device', { token, platform });
+export const unregisterDevice = (token)            => post('/notifications/unregister-device', { token });
 
 // ── LOCATION ──────────────────────────────────────────────
 export const getTripLocation  = (id) => get(`/location/trip/${id}`);

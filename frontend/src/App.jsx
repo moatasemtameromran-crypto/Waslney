@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { getMe } from './api.js';
 import { connectSocket } from './socket.js';
+import { initPush } from './push.js';
 import Landing      from './pages/Landing.jsx';
 import PassengerDash from './pages/passenger/PassengerDash.jsx';
 import DriverDash    from './pages/driver/DriverDash.jsx';
@@ -34,6 +35,7 @@ export default function App() {
         const u = data.user || data;
         setUser(u);
         connectSocket(u.id, u.role);
+        initPush();
       })
       .catch(() => localStorage.removeItem('shuttle_token'))
       .finally(() => setLoading(false));
@@ -43,6 +45,7 @@ export default function App() {
     localStorage.setItem('shuttle_token', token);
     setUser(userData);
     connectSocket(userData.id, userData.role);
+    initPush();
   };
 
   const logout = () => {
@@ -61,7 +64,7 @@ export default function App() {
   }
 
   if (loading) return (
-    <div style={{ minHeight:'100vh', background:'#000', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
+    <div style={{ minHeight:'100vh', background:'#000', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16, paddingTop:'env(safe-area-inset-top)', paddingBottom:'env(safe-area-inset-bottom)' }}>
       <div style={{ fontSize:36 }}>🚐</div>
       <div style={{ color:'#fbbf24', fontFamily:"'Sora',sans-serif", fontSize:13, letterSpacing:'.15em', fontWeight:700 }}>WASLNEY</div>
       <div style={{ width:24, height:24, border:'2px solid #1a1a1a', borderTopColor:'#fbbf24', borderRadius:'50%', animation:'spin .7s linear infinite' }} />

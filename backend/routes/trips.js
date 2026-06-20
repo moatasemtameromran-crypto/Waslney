@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db     = require('../db');
 const { requireAuth, requireRole } = require('../auth');
+const { sendPushToUser } = require('../push');
 
 // Helper to get the io instance safely (avoids circular-require issues)
 function getIo() {
@@ -172,8 +173,10 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
     }
 
     if (driver_id) {
+      const asgMsg = `New trip assigned: ${from_loc} → ${to_loc} on ${date}`;
       await db.query('INSERT INTO notifications (user_id,message) VALUES (?,?)',
-        [driver_id, `New trip assigned: ${from_loc} → ${to_loc} on ${date}`]);
+        [driver_id, asgMsg]);
+      sendPushToUser(driver_id, 'New trip assigned 🚐', asgMsg).catch(()=>{});
     }
 
     const [trip] = await db.query('SELECT * FROM trips WHERE id=?', [tripId]);
@@ -224,6 +227,15 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res) => {
 router.post('/:id/start', requireAuth, requireRole('driver'), async (req, res) => {
   try {
     await db.query("UPDATE trips SET status='active' WHERE id=? AND driver_id=?", [req.params.id, req.user.id]);
+    // Notify booked passengers the trip has started.
+    try {
+      const [pax] = await db.query("SELECT passenger_id FROM bookings WHERE trip_id=? AND status='confirmed'", [req.params.id]);
+      for (const p of pax) {
+        const msg = 'Your trip has started! Track your driver live. 🚐';
+        await db.query('INSERT INTO notifications (user_id,message) VALUES (?,?)', [p.passenger_id, msg]);
+        sendPushToUser(p.passenger_id, 'Trip started 🚐', msg, { tripId: String(req.params.id) }).catch(()=>{});
+      }
+    } catch(_) {}
     const io = getIo();
     if (io) {
       const tripId = req.params.id;
@@ -245,6 +257,7 @@ router.post('/:id/complete', requireAuth, requireRole('driver'), async (req, res
     for (const b of bookings) {
       await db.query('INSERT INTO notifications (user_id,message) VALUES (?,?)',
         [b.passenger_id, `Your trip is complete! Please rate your driver.`]);
+      sendPushToUser(b.passenger_id, 'Trip complete ⭐', 'Your trip is complete! Please rate your driver.').catch(()=>{});
     }
     const io = getIo();
     if (io) {
@@ -310,6 +323,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     for (const b of bookings) {
       await db.query('INSERT INTO notifications (user_id,message) VALUES (?,?)',
         [b.passenger_id, `Trip cancelled by admin. Your booking has been refunded.`]);
+      sendPushToUser(b.passenger_id, 'Trip cancelled', 'Trip cancelled by admin. Your booking has been refunded.').catch(()=>{});
     }
     await db.query("UPDATE bookings SET status='cancelled' WHERE trip_id=?", [req.params.id]);
     res.json({ message: 'Trip cancelled' });

@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db     = require('../db');
 const { requireAuth, requireRole } = require('../auth');
+const { sendPushToUser } = require('../push');
 
 // POST /api/checkins/stop-arrived — MUST be before /:bookingId to avoid route shadowing
 router.post('/stop-arrived', requireAuth, requireRole('driver'), async (req, res) => {
@@ -68,19 +69,25 @@ router.put('/:bookingId', requireAuth, requireRole('driver'), async (req, res) =
         [booking.trip_id]
       );
       const dropoffLabel = dropoffStop[0]?.label || booking.to_loc || 'your drop-off point';
+      const msg = `✅ You've been picked up! Driver is heading to ${dropoffLabel}. Open the app for live navigation & ETA.`;
       await db.query('INSERT INTO notifications (user_id,message) VALUES (?,?)',
-        [booking.passenger_id, `✅ You've been picked up! Driver is heading to ${dropoffLabel}. Open the app for live navigation & ETA.`]);
+        [booking.passenger_id, msg]);
+      sendPushToUser(booking.passenger_id, 'Picked up ✅', msg).catch(()=>{});
     }
 
     if (status === 'noshow') {
       await db.query("UPDATE bookings SET status='cancelled' WHERE id=?", [req.params.bookingId]);
+      const msg = `❌ Your trip was cancelled — you were marked as no-show for ${booking.from_loc} → ${booking.to_loc}.`;
       await db.query('INSERT INTO notifications (user_id,message) VALUES (?,?)',
-        [booking.passenger_id, `❌ Your trip was cancelled — you were marked as no-show for ${booking.from_loc} → ${booking.to_loc}.`]);
+        [booking.passenger_id, msg]);
+      sendPushToUser(booking.passenger_id, 'Trip cancelled', msg).catch(()=>{});
     }
 
     if (status === 'dropped') {
+      const msg = `🏁 You've been dropped off! Hope you had a great ride. Please rate your driver.`;
       await db.query('INSERT INTO notifications (user_id,message) VALUES (?,?)',
-        [booking.passenger_id, `🏁 You've been dropped off! Hope you had a great ride. Please rate your driver.`]);
+        [booking.passenger_id, msg]);
+      sendPushToUser(booking.passenger_id, 'Dropped off 🏁', msg).catch(()=>{});
     }
 
     res.json({ message: 'Checkin updated', status });

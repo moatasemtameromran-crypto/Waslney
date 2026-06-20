@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
 const { requireAuth, requireRole } = require('../auth');
+const { sendPushToUser } = require('../push');
 
 function requireAdmin(req, res, next) {
   if (!req.user || req.user.role !== 'admin') {
@@ -132,6 +133,7 @@ router.post('/:id/approve', requireAuth, requireAdmin, async (req, res) => {
         `INSERT INTO notifications (user_id, message) VALUES (?, ?)`,
         [id, '✅ Your account has been approved! You can now log in and start accepting trips.']
       );
+      sendPushToUser(id, 'Account approved ✅', 'Your account has been approved! You can now log in and start accepting trips.').catch(()=>{});
     } catch (_) {}
 
     res.json({ ok: true });
@@ -164,6 +166,7 @@ router.post('/:id/reject', requireAuth, requireAdmin, async (req, res) => {
         `INSERT INTO notifications (user_id, message) VALUES (?, ?)`,
         [id, msg]
       );
+      sendPushToUser(id, 'Account update', msg).catch(()=>{});
     } catch (_) {}
 
     res.json({ ok: true });

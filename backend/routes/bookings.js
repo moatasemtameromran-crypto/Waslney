@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db     = require('../db');
 const { requireAuth, requireRole } = require('../auth');
+const { sendPushToUser } = require('../push');
 
 function getIo() {
   try { return require('../server').io; } catch(_) { return null; }
@@ -207,11 +208,15 @@ router.post('/', requireAuth, requireRole('passenger'), async (req, res) => {
     const bookingId = result.insertId;
     await db.query('INSERT INTO checkins (booking_id) VALUES (?)', [bookingId]);
 
+    const passengerMsg = `Booking confirmed for ${dayName} ${travel_date}: ${trip.from_loc} → ${trip.to_loc}${isSurge ? ` (surge +${effectivePrice - trip.price} EGP)` : ''}`;
     await db.query('INSERT INTO notifications (user_id, message) VALUES (?,?)',
-      [req.user.id, `Booking confirmed for ${dayName} ${travel_date}: ${trip.from_loc} → ${trip.to_loc}${isSurge ? ` (surge +${effectivePrice - trip.price} EGP)` : ''}`]);
+      [req.user.id, passengerMsg]);
+    sendPushToUser(req.user.id, 'Booking confirmed ✓', passengerMsg).catch(()=>{});
     if (trip.driver_id) {
+      const driverMsg = `New booking: ${seats} seat(s) on ${dayName} ${travel_date} — ${trip.from_loc} → ${trip.to_loc}`;
       await db.query('INSERT INTO notifications (user_id, message) VALUES (?,?)',
-        [trip.driver_id, `New booking: ${seats} seat(s) on ${dayName} ${travel_date} — ${trip.from_loc} → ${trip.to_loc}`]);
+        [trip.driver_id, driverMsg]);
+      sendPushToUser(trip.driver_id, 'New booking 🎫', driverMsg).catch(()=>{});
     }
 
     const [booking] = await db.query(`
