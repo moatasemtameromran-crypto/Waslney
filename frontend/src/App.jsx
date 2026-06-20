@@ -35,7 +35,7 @@ export default function App() {
         const u = data.user || data;
         setUser(u);
         connectSocket(u.id, u.role);
-        initPush();
+        initPush(notify);
       })
       .catch(() => localStorage.removeItem('shuttle_token'))
       .finally(() => setLoading(false));
@@ -45,7 +45,7 @@ export default function App() {
     localStorage.setItem('shuttle_token', token);
     setUser(userData);
     connectSocket(userData.id, userData.role);
-    initPush();
+    initPush(notify);
   };
 
   const logout = () => {

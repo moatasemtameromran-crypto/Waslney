@@ -1,20 +1,16 @@
 // Push notification registration (Capacitor + FCM). No-op on web.
 import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 import { registerDevice } from './api.js';
 
 let wired = false;
 
-// Call once the user is logged in (so we attach the token to their account).
-export async function initPush() {
-  if (!Capacitor.isNativePlatform()) return;
+// initPush(notify?) — notify is an optional (title, body, type) toast callback
+// so the user can SEE what happens (permission, success, or the exact error).
+export async function initPush(notify) {
+  const say = (t, b, type) => { try { if (notify) notify(t, b, type); } catch (_) {} };
 
-  let PushNotifications;
-  try {
-    ({ PushNotifications } = await import('@capacitor/push-notifications'));
-  } catch (e) {
-    console.warn('Push plugin not available:', e?.message);
-    return;
-  }
+  if (!Capacitor.isNativePlatform()) return;
 
   // Ask permission, then register with FCM.
   try {
@@ -23,11 +19,12 @@ export async function initPush() {
       perm = await PushNotifications.requestPermissions();
     }
     if (perm.receive !== 'granted') {
-      console.log('Push permission not granted');
+      say('Notifications off', 'Turn on notifications in settings to get ride alerts.', 'error');
       return;
     }
   } catch (e) {
     console.warn('Push permission error:', e?.message);
+    say('Push error', e?.message || 'Permission check failed.', 'error');
     return;
   }
 
@@ -58,18 +55,23 @@ export async function initPush() {
       try {
         await registerDevice(token.value, Capacitor.getPlatform());
         console.log('Device registered for push');
+        say('Notifications on', 'You will now receive ride alerts.', 'success');
       } catch (e) {
         console.warn('registerDevice failed:', e?.message);
+        say('Push save failed', e?.message || 'Could not save device token.', 'error');
       }
     });
 
     PushNotifications.addListener('registrationError', (err) => {
-      console.warn('Push registration error:', JSON.stringify(err));
+      const m = err?.error || JSON.stringify(err);
+      console.warn('Push registration error:', m);
+      say('Push registration failed', String(m), 'error');
     });
 
     // Foreground notifications: the OS tray won't show them, so surface lightly.
     PushNotifications.addListener('pushNotificationReceived', (notif) => {
       window.dispatchEvent(new CustomEvent('waslney:push', { detail: notif }));
+      say(notif?.title || 'Waslney', notif?.body || '', 'default');
     });
 
     // User tapped a notification.
@@ -82,5 +84,6 @@ export async function initPush() {
     await PushNotifications.register();
   } catch (e) {
     console.warn('Push register failed:', e?.message);
+    say('Push error', e?.message || 'Registration failed.', 'error');
   }
 }
