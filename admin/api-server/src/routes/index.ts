@@ -25,6 +25,7 @@ import accountsRouter from "./admin/accounts";
 import reviewRouter from "./admin/review";
 import manageBookingsRouter from "./admin/manageBookings";
 import tendersRouter from "./admin/tenders";
+import mapRouter from "./admin/map";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use("/admin/accounts", accountsRouter);
 router.use("/admin/review", reviewRouter);
 router.use("/admin/manage-bookings", manageBookingsRouter);
 router.use("/admin/tenders", tendersRouter);
+router.use("/admin/map", mapRouter);
 
 export default router;

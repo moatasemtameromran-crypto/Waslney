@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, DashboardStats } from "@/lib/api";
-import { Users, Car, MapPin, DollarSign, TrendingUp, Clock } from "lucide-react";
+import { Users, Car, MapPin, DollarSign, TrendingUp, Clock, Navigation } from "lucide-react";
+import MapView, { MapMarker } from "@/components/MapView";
 
 function StatCard({ label, value, sub, icon: Icon, color }: {
   label: string; value: string | number; sub?: string; icon: any; color: string;
@@ -32,6 +33,77 @@ function statusBadge(status: string) {
     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[status] || "bg-muted text-muted-foreground"}`}>
       {status}
     </span>
+  );
+}
+
+// Live map of every active/upcoming trip. Buses with GPS show a 🚌; trips not yet
+// sharing GPS show their pickup point (🟢). Auto-refreshes every 12 seconds.
+function LiveTripsMap() {
+  const [trips, setTrips] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      api.liveMap()
+        .then((d) => { if (alive) { setTrips(d); setUpdatedAt(new Date()); } })
+        .catch(() => {})
+        .finally(() => { if (alive) setLoading(false); });
+    load();
+    const id = setInterval(load, 12000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  const markers: MapMarker[] = [];
+  let liveBuses = 0;
+  for (const t of trips) {
+    const route = `${t.from_loc} → ${t.to_loc}`;
+    if (t.driver_lat != null && t.driver_lng != null) {
+      liveBuses++;
+      markers.push({
+        lat: +t.driver_lat, lng: +t.driver_lng, type: "bus",
+        label: `🚌 <b>${t.driver_name || "Driver"}</b><br/>${route}<br/>${t.plate || ""} · ${t.confirmed_bookings || 0} booked`,
+      });
+    } else if (t.pickup_lat != null && t.pickup_lng != null) {
+      markers.push({
+        lat: +t.pickup_lat, lng: +t.pickup_lng, type: "pickup",
+        label: `🟢 <b>${route}</b><br/>${t.driver_name || "Unassigned"} · waiting for GPS`,
+      });
+    }
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Navigation size={16} className="text-muted-foreground" />
+          <h2 className="font-semibold text-foreground">Live Trips Map</h2>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>🚌 {liveBuses} live · {trips.length} active</span>
+          {updatedAt && <span>updated {updatedAt.toLocaleTimeString()}</span>}
+        </div>
+      </div>
+      <div className="p-4">
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="relative">
+            <MapView markers={markers} height={380} />
+            {markers.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="bg-card/90 border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground">
+                  No active trips on the map right now
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -99,6 +171,9 @@ export default function Dashboard() {
           color="bg-yellow-500/15 text-yellow-400"
         />
       </div>
+
+      {/* Live Trips Map */}
+      <LiveTripsMap />
 
       {/* Recent Trips */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">

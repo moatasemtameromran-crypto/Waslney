@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, Trip } from "@/lib/api";
-import { Search, XCircle } from "lucide-react";
+import { Search, XCircle, X, MapPin } from "lucide-react";
+import MapView, { MapMarker } from "@/components/MapView";
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -24,6 +25,8 @@ export default function Trips() {
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState<number | null>(null);
+  const [detail, setDetail] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -48,6 +51,11 @@ export default function Trips() {
     if (!confirm("Cancel this trip and all its bookings?")) return;
     setCancelling(id);
     try { await api.cancelTrip(id); load(); } finally { setCancelling(null); }
+  }
+
+  async function openDetail(id: number) {
+    setDetailLoading(true); setDetail({ id });
+    try { setDetail(await api.tripDetail(id)); } catch { setDetail(null); } finally { setDetailLoading(false); }
   }
 
   return (
@@ -114,16 +122,25 @@ export default function Trips() {
                     <td className="px-5 py-3 text-foreground hidden lg:table-cell">{t.confirmed_bookings || 0}</td>
                     <td className="px-5 py-3">{statusBadge(t.status)}</td>
                     <td className="px-5 py-3">
-                      {t.status !== "cancelled" && t.status !== "completed" && (
+                      <div className="flex items-center gap-1.5">
                         <button
-                          disabled={cancelling === t.id}
-                          onClick={() => cancelTrip(t.id)}
-                          className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                          title="Cancel trip"
+                          onClick={() => openDetail(t.id)}
+                          className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                          title="View on map"
                         >
-                          <XCircle size={14} />
+                          <MapPin size={14} />
                         </button>
-                      )}
+                        {t.status !== "cancelled" && t.status !== "completed" && (
+                          <button
+                            disabled={cancelling === t.id}
+                            onClick={() => cancelTrip(t.id)}
+                            className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                            title="Cancel trip"
+                          >
+                            <XCircle size={14} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -132,6 +149,87 @@ export default function Trips() {
           </div>
         </div>
       )}
+
+      {detail && (
+        <TripDetailModal detail={detail} loading={detailLoading} onClose={() => setDetail(null)} />
+      )}
+    </div>
+  );
+}
+
+function TripDetailModal({ detail, loading, onClose }: { detail: any; loading: boolean; onClose: () => void }) {
+  const markers: MapMarker[] = [];
+  const path: [number, number][] = [];
+
+  const stops = Array.isArray(detail?.stops) ? detail.stops : [];
+  for (const s of stops) {
+    if (s.lat == null || s.lng == null) continue;
+    const type = s.type === "pickup" ? "pickup" : s.type === "dropoff" ? "dropoff" : "stop";
+    markers.push({ lat: +s.lat, lng: +s.lng, type: type as any, label: `${s.label || s.type}` });
+    path.push([+s.lat, +s.lng]);
+  }
+  // Fallback to trip pickup/dropoff coords if no stops
+  if (markers.length === 0) {
+    if (detail?.pickup_lat != null) { markers.push({ lat: +detail.pickup_lat, lng: +detail.pickup_lng, type: "pickup", label: detail.origin }); path.push([+detail.pickup_lat, +detail.pickup_lng]); }
+    if (detail?.dropoff_lat != null) { markers.push({ lat: +detail.dropoff_lat, lng: +detail.dropoff_lng, type: "dropoff", label: detail.destination }); path.push([+detail.dropoff_lat, +detail.dropoff_lng]); }
+  }
+  // Live driver position
+  if (detail?.driver_location?.lat != null) {
+    markers.push({
+      lat: +detail.driver_location.lat, lng: +detail.driver_location.lng, type: "bus",
+      label: `🚌 ${detail.driver_name || "Driver"} (live)`,
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-card">
+          <div>
+            <h3 className="font-semibold">{detail.origin || "Trip"} → {detail.destination || ""}</h3>
+            <p className="text-xs text-muted-foreground">Trip #{detail.id} {detail.driver_name ? `· ${detail.driver_name}` : ""}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary"><X size={18} /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          {loading ? (
+            <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+          ) : (
+            <>
+              <div className="relative">
+                <MapView markers={markers} polyline={path.length > 1 ? path : undefined} height={320} />
+                {markers.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span className="bg-card/90 border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground">No location data for this trip</span>
+                  </div>
+                )}
+              </div>
+              {detail.driver_location?.updated_at && (
+                <p className="text-xs text-muted-foreground">🚌 Driver GPS last updated {new Date(detail.driver_location.updated_at).toLocaleString()}</p>
+              )}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-muted-foreground">Price:</span> EGP {detail.price}</div>
+                <div><span className="text-muted-foreground">Seats:</span> {detail.seats ?? detail.total_seats}</div>
+                <div><span className="text-muted-foreground">Status:</span> {statusBadge(detail.status)}</div>
+                <div><span className="text-muted-foreground">Driver:</span> {detail.driver_phone || "—"}</div>
+              </div>
+              {stops.length > 0 && (
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Stops</div>
+                  <div className="space-y-1">
+                    {stops.map((s: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <span>{s.type === "pickup" ? "🟢" : s.type === "dropoff" ? "🔴" : "📍"}</span>
+                        <span>{s.label || s.type}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

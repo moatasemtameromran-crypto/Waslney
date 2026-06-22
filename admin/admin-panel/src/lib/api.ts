@@ -171,6 +171,10 @@ export const api = {
   /* ── Create Trip ── */
   createTrip: (data: any) => request<{ id: number }>("/trips", { method: "POST", body: JSON.stringify(data) }),
   activeDrivers: () => request<any[]>("/users/drivers?status=active"),
+
+  /* ── Live Map ── */
+  liveMap: () => request<any[]>("/map/live"),
+  tripDetail: (id: number) => request<any>(`/trips/${id}`),
 };
 
 /* ── Types ── */

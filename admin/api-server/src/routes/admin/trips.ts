@@ -53,7 +53,13 @@ router.get("/:id", requireAdminAuth, async (req, res) => {
       [req.params.id]
     ) as any;
 
-    res.json({ ...trips[0], stops, bookings: bkings });
+    // Driver's last known live position for this trip (may be empty)
+    const [loc] = await db.query(
+      `SELECT lat, lng, updated_at FROM driver_locations WHERE trip_id = ? LIMIT 1`,
+      [req.params.id]
+    ).catch(() => [[]] as any);
+
+    res.json({ ...trips[0], stops, bookings: bkings, driver_location: loc[0] || null });
   } catch (err: any) {
     req.log.error({ err: err.message }, "Get trip error");
     res.status(500).json({ error: "Server error" });
