@@ -52,6 +52,12 @@ export const cancelBooking   = (id)  => put(`/bookings/${id}/cancel`);
 export const getTripBookings = (tid) => get(`/bookings/trip/${tid}`);
 export const getInvoice      = (id)  => get(`/bookings/${id}/invoice`);
 
+// ── HELP & SUPPORT ────────────────────────────────────────
+export const getFaq          = ()    => get('/support/faq');
+export const getMyTickets    = ()    => get('/support/tickets');
+export const createTicket    = (b)   => post('/support/ticket', b);
+export const suggestRoute    = (b)   => post('/support/suggest-route', b);
+
 // ── CHECKINS ──────────────────────────────────────────────
 export const updateCheckin   = (bookingId, status) => put(`/checkins/${bookingId}`, { status });
 export const markStopArrived = (trip_id, stop_index) => post('/checkins/stop-arrived', { trip_id, stop_index });

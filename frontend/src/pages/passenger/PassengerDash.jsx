@@ -818,6 +818,40 @@ export default function PassengerDash(){
     finally{setInvoiceLoading(false);}
   }
 
+  // Help & Support
+  const [supportView,setSupportView]=useState(null); // null | 'help' | 'suggest'
+  const [faq,setFaq]=useState([]);
+  const [myTickets,setMyTickets]=useState([]);
+  const [ticketSubject,setTicketSubject]=useState('');
+  const [ticketMsg,setTicketMsg]=useState('');
+  const [suggestFrom,setSuggestFrom]=useState('');
+  const [suggestTo,setSuggestTo]=useState('');
+  const [suggestNote,setSuggestNote]=useState('');
+  const [supportBusy,setSupportBusy]=useState(false);
+  async function openHelp(){
+    setSupportView('help');
+    try{const[f,t]=await Promise.all([api.getFaq(),api.getMyTickets()]);setFaq(Array.isArray(f)?f:[]);setMyTickets(Array.isArray(t)?t:[]);}catch{}
+  }
+  async function submitTicket(){
+    if(!ticketSubject.trim()||!ticketMsg.trim()){notify('Missing info','Add a subject and message.','error');return;}
+    setSupportBusy(true);
+    try{await api.createTicket({subject:ticketSubject.trim(),message:ticketMsg.trim()});
+      setTicketSubject('');setTicketMsg('');
+      const t=await api.getMyTickets();setMyTickets(Array.isArray(t)?t:[]);
+      notify('Sent','Our team will get back to you.','success');
+    }catch{notify('Error','Could not send your message.','error');}
+    finally{setSupportBusy(false);}
+  }
+  async function submitSuggestRoute(){
+    if(!suggestFrom.trim()||!suggestTo.trim()){notify('Missing info','Add both from and to.','error');return;}
+    setSupportBusy(true);
+    try{await api.suggestRoute({from_label:suggestFrom.trim(),to_label:suggestTo.trim(),note:suggestNote.trim()});
+      setSuggestFrom('');setSuggestTo('');setSuggestNote('');setSupportView(null);
+      notify('Thanks!','Your route suggestion was submitted.','success');
+    }catch{notify('Error','Could not submit suggestion.','error');}
+    finally{setSupportBusy(false);}
+  }
+
   async function loadPendingDrivers(){
     setReviewLoading(true);
     try{ const d=await api.getPendingDrivers(); setPendingDrivers(d.drivers||[]); }
@@ -1856,7 +1890,70 @@ export default function PassengerDash(){
               <DetailRow label="Active bookings" val={activeBookings.length}/>
               <DetailRow label="Smart Pool requests" val={myPoolRequests.length}/>
             </div>
+            <div style={{...card,marginBottom:14}}>
+              <p style={sectSt}>Help</p>
+              <button onClick={openHelp} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',borderBottom:'1px solid #1a1a1a',padding:'14px 0',color:'#fff',fontSize:14,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+                <span>🆘 Help & Support</span><span style={{color:'#555'}}>›</span></button>
+              <button onClick={()=>setSupportView('suggest')} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',padding:'14px 0',color:'#fff',fontSize:14,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+                <span>🗺️ Suggest a route</span><span style={{color:'#555'}}>›</span></button>
+            </div>
             <button onClick={logout} style={{...btnDanger,width:'100%',marginTop:8,padding:'14px',fontSize:14}}>Sign out</button>
+          </div>
+        )}
+
+        {/* ── HELP & SUPPORT MODAL ── */}
+        {supportView==='help'&&(
+          <div onClick={()=>setSupportView(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:600,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'#0f0f0f',borderTopLeftRadius:24,borderTopRightRadius:24,borderTop:'1px solid #fbbf2433',padding:'20px 20px 32px',maxHeight:'90vh',overflowY:'auto'}}>
+              <div style={{width:40,height:4,borderRadius:2,background:'#333',margin:'0 auto 18px'}}/>
+              <h2 style={{fontSize:20,fontWeight:800,color:'#fff',marginBottom:16}}>🆘 Help & Support</h2>
+              <p style={{fontSize:12,color:'#666',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:10}}>Send us a message</p>
+              <input value={ticketSubject} onChange={e=>setTicketSubject(e.target.value)} placeholder="Subject"
+                style={{width:'100%',boxSizing:'border-box',background:'#161616',border:'1px solid #222',borderRadius:12,padding:'13px 14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:14,outline:'none',marginBottom:10}}/>
+              <textarea value={ticketMsg} onChange={e=>setTicketMsg(e.target.value)} placeholder="How can we help?"
+                style={{width:'100%',boxSizing:'border-box',background:'#161616',border:'1px solid #222',borderRadius:12,padding:'13px 14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:14,outline:'none',resize:'none',height:90,marginBottom:10}}/>
+              <button onClick={submitTicket} disabled={supportBusy} style={{...btnPrimary,width:'100%',opacity:supportBusy?.6:1}}>{supportBusy?'Sending…':'Send message'}</button>
+              {myTickets.length>0&&(<>
+                <p style={{fontSize:12,color:'#666',textTransform:'uppercase',letterSpacing:'.08em',margin:'20px 0 10px'}}>Your messages</p>
+                {myTickets.map(t=>(
+                  <div key={t.id} style={{background:'#161616',border:'1px solid #222',borderRadius:12,padding:'12px 14px',marginBottom:8}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                      <span style={{fontSize:13.5,fontWeight:700,color:'#fff'}}>{t.subject}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:t.status==='resolved'?'#4ade80':'#fbbf24'}}>{t.status==='resolved'?'✓ Resolved':'Open'}</span>
+                    </div>
+                    <div style={{fontSize:12.5,color:'#999'}}>{t.message}</div>
+                    {t.admin_reply&&<div style={{fontSize:12.5,color:'#60a5fa',marginTop:8,paddingTop:8,borderTop:'1px solid #222'}}>↳ {t.admin_reply}</div>}
+                  </div>
+                ))}
+              </>)}
+              <p style={{fontSize:12,color:'#666',textTransform:'uppercase',letterSpacing:'.08em',margin:'20px 0 10px'}}>FAQ</p>
+              {faq.map((f,i)=>(
+                <details key={i} style={{background:'#161616',border:'1px solid #222',borderRadius:12,padding:'12px 14px',marginBottom:8}}>
+                  <summary style={{fontSize:13.5,fontWeight:600,color:'#fff',cursor:'pointer'}}>{f.q}</summary>
+                  <div style={{fontSize:12.5,color:'#999',marginTop:8}}>{f.a}</div>
+                </details>
+              ))}
+              <button onClick={()=>setSupportView(null)} style={{width:'100%',background:'#161616',color:'#aaa',border:'1px solid #222',borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginTop:14}}>Close</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── SUGGEST ROUTE MODAL ── */}
+        {supportView==='suggest'&&(
+          <div onClick={()=>setSupportView(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:600,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'#0f0f0f',borderTopLeftRadius:24,borderTopRightRadius:24,borderTop:'1px solid #fbbf2433',padding:'20px 20px 32px'}}>
+              <div style={{width:40,height:4,borderRadius:2,background:'#333',margin:'0 auto 18px'}}/>
+              <h2 style={{fontSize:20,fontWeight:800,color:'#fff',marginBottom:6}}>🗺️ Suggest a route</h2>
+              <p style={{fontSize:13,color:'#666',marginBottom:16}}>Tell us where you'd like Waslney to run trips.</p>
+              <input value={suggestFrom} onChange={e=>setSuggestFrom(e.target.value)} placeholder="From (area)"
+                style={{width:'100%',boxSizing:'border-box',background:'#161616',border:'1px solid #222',borderRadius:12,padding:'13px 14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:14,outline:'none',marginBottom:10}}/>
+              <input value={suggestTo} onChange={e=>setSuggestTo(e.target.value)} placeholder="To (area)"
+                style={{width:'100%',boxSizing:'border-box',background:'#161616',border:'1px solid #222',borderRadius:12,padding:'13px 14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:14,outline:'none',marginBottom:10}}/>
+              <textarea value={suggestNote} onChange={e=>setSuggestNote(e.target.value)} placeholder="Anything else? (times, days, etc.)"
+                style={{width:'100%',boxSizing:'border-box',background:'#161616',border:'1px solid #222',borderRadius:12,padding:'13px 14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:14,outline:'none',resize:'none',height:80,marginBottom:12}}/>
+              <button onClick={submitSuggestRoute} disabled={supportBusy} style={{...btnPrimary,width:'100%',opacity:supportBusy?.6:1}}>{supportBusy?'Submitting…':'Submit suggestion'}</button>
+              <button onClick={()=>setSupportView(null)} style={{width:'100%',background:'#161616',color:'#aaa',border:'1px solid #222',borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginTop:10}}>Cancel</button>
+            </div>
           </div>
         )}
 
