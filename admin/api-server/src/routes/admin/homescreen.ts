@@ -28,6 +28,25 @@ async function ensureTable() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+
+  // Self-migrate the content columns (MySQL has no ADD COLUMN IF NOT EXISTS).
+  try {
+    const [cols] = await db.query(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'homescreen_settings'"
+    ) as any;
+    const have = new Set(cols.map((c: any) => c.COLUMN_NAME));
+    const wanted: Record<string, string> = {
+      title:     "VARCHAR(200) DEFAULT NULL",
+      subtitle:  "VARCHAR(400) DEFAULT NULL",
+      image_url: "VARCHAR(1000) DEFAULT NULL",
+      link_url:  "VARCHAR(1000) DEFAULT NULL",
+    };
+    for (const [name, def] of Object.entries(wanted)) {
+      if (!have.has(name)) {
+        await db.query(`ALTER TABLE homescreen_settings ADD COLUMN ${name} ${def}`).catch(() => {});
+      }
+    }
+  } catch (_) {}
 }
 
 router.get("/", requireAdminAuth, async (req, res) => {
@@ -53,13 +72,13 @@ router.get("/", requireAdminAuth, async (req, res) => {
 });
 
 router.post("/", requireAdminAuth, async (req, res) => {
-  const { category, display_order, active, user_type, geofence_name, video_url, city } = req.body;
+  const { category, display_order, active, user_type, geofence_name, video_url, city, title, subtitle, image_url, link_url } = req.body;
   try {
     await ensureTable();
     const [result] = await db.query(
-      `INSERT INTO homescreen_settings (category, display_order, active, user_type, geofence_name, video_url, city)
-       VALUES (?,?,?,?,?,?,?)`,
-      [category, display_order || 1, active !== false ? 1 : 0, user_type || 'Customer', geofence_name || 'Default', video_url || null, city || 'Cairo']
+      `INSERT INTO homescreen_settings (category, display_order, active, user_type, geofence_name, video_url, city, title, subtitle, image_url, link_url)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [category, display_order || 1, active !== false ? 1 : 0, user_type || 'Customer', geofence_name || 'Default', video_url || null, city || 'Cairo', title || null, subtitle || null, image_url || null, link_url || null]
     ) as any;
     res.status(201).json({ id: result.insertId });
   } catch (err: any) {
@@ -68,13 +87,15 @@ router.post("/", requireAdminAuth, async (req, res) => {
 });
 
 router.put("/:id", requireAdminAuth, async (req, res) => {
-  const { category, display_order, active, user_type, geofence_name, video_url } = req.body;
+  const { category, display_order, active, user_type, geofence_name, video_url, title, subtitle, image_url, link_url } = req.body;
   try {
     await db.query(
       `UPDATE homescreen_settings SET category=COALESCE(?,category), display_order=COALESCE(?,display_order),
        active=COALESCE(?,active), user_type=COALESCE(?,user_type),
-       geofence_name=COALESCE(?,geofence_name), video_url=COALESCE(?,video_url) WHERE id=?`,
-      [category, display_order, active !== undefined ? (active ? 1 : 0) : null, user_type, geofence_name, video_url, req.params.id]
+       geofence_name=COALESCE(?,geofence_name), video_url=COALESCE(?,video_url),
+       title=COALESCE(?,title), subtitle=COALESCE(?,subtitle),
+       image_url=COALESCE(?,image_url), link_url=COALESCE(?,link_url) WHERE id=?`,
+      [category, display_order, active !== undefined ? (active ? 1 : 0) : null, user_type, geofence_name, video_url, title, subtitle, image_url, link_url, req.params.id]
     );
     res.json({ ok: true });
   } catch (err: any) {

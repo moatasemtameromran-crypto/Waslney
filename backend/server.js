@@ -29,6 +29,7 @@ app.use('/api/geocode',        require('./routes/geocode'));
 app.use('/api/pool',           require('./routes/pool'));
 app.use('/api/saved-points', require('./routes/saved_points'));
 app.use('/api/tender',       require('./routes/tender'));
+app.use('/api/homescreen',   require('./routes/homescreen'));
 // ── SOCKET.IO REAL-TIME TRACKING ──────────────────────────
 require('./socket/tracking')(io);
 

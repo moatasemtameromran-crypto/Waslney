@@ -98,3 +98,6 @@ export const getSavedPoints    = ()          => get('/saved-points');
 export const createSavedPoint  = (body)      => post('/saved-points', body);
 export const updateSavedPoint  = (id, body)  => put(`/saved-points/${id}`, body);
 export const deleteSavedPoint  = (id)        => del(`/saved-points/${id}`);
+
+// ── HOME SCREEN CARDS (admin-controlled) ──────────────────
+export const getHomeCards      = ()          => get('/homescreen');

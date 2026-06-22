@@ -377,6 +377,56 @@ function TripDetailSheet({ booking, poolRequest, userLocation, onOpenChat, onClo
   );
 }
 
+// ── Admin-controlled home screen cards ──────────────────────────────────────
+const HOME_CARD_DEFAULTS = {
+  'Promotions':       { icon:'🎁', title:'Promotions',       subtitle:'Save on your next ride',         grad:'linear-gradient(135deg,#3b1d0a,#5a2e0d)', color:'#fbbf24' },
+  'Refer & Earn':     { icon:'🤝', title:'Refer & Earn',     subtitle:'Invite friends, earn rewards',    grad:'linear-gradient(135deg,#0a2e1a,#0d4a2a)', color:'#4ade80' },
+  'Verify Documents': { icon:'📄', title:'Verify Documents', subtitle:'Complete your verification',      grad:'linear-gradient(135deg,#0a1628,#0f2347)', color:'#60a5fa' },
+  "What's New":       { icon:'✨', title:"What's New",       subtitle:'See the latest updates',          grad:'linear-gradient(135deg,#1a0533,#1e0a45)', color:'#c084fc' },
+  'Why Mobility':     { icon:'🚌', title:'Why Waslney',      subtitle:'Reliable shuttle rides',          grad:'linear-gradient(135deg,#111,#1a1a1a)',    color:'#fbbf24' },
+};
+
+function HomeCards({ cards }) {
+  if (!cards || !cards.length) return null;
+  const open = (url) => { if (url) { try { window.open(url, '_blank'); } catch (_) {} } };
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:16 }}>
+      {cards.map((c) => {
+        const d = HOME_CARD_DEFAULTS[c.category] || { icon:'⭐', title:c.category, subtitle:'', grad:'linear-gradient(135deg,#111,#1a1a1a)', color:'#fbbf24' };
+        const title = c.title || d.title;
+        const subtitle = c.subtitle || d.subtitle;
+        const clickable = !!c.link_url;
+
+        if (c.image_url) {
+          return (
+            <div key={c.id} onClick={() => open(c.link_url)}
+              style={{ position:'relative', borderRadius:18, overflow:'hidden', border:'1px solid #1a1a1a', cursor:clickable?'pointer':'default', minHeight:120 }}>
+              <img src={c.image_url} alt={title} style={{ width:'100%', height:140, objectFit:'cover', display:'block' }} />
+              <div style={{ position:'absolute', inset:0, background:'linear-gradient(0deg,rgba(0,0,0,0.8),rgba(0,0,0,0.05))' }} />
+              <div style={{ position:'absolute', left:16, right:16, bottom:14 }}>
+                <div style={{ fontSize:16, fontWeight:800, color:'#fff' }}>{title}</div>
+                {subtitle && <div style={{ fontSize:12, color:'rgba(255,255,255,0.8)', marginTop:2 }}>{subtitle}</div>}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div key={c.id} onClick={() => open(c.link_url)}
+            style={{ background:d.grad, borderRadius:18, padding:'16px 18px', border:'1px solid #1a1a1a', display:'flex', alignItems:'center', gap:14, cursor:clickable?'pointer':'default' }}>
+            <div style={{ width:46, height:46, borderRadius:13, background:'rgba(255,255,255,0.08)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>{d.icon}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:15, fontWeight:800, color:d.color }}>{title}</div>
+              {subtitle && <div style={{ fontSize:12, color:'#999', marginTop:2 }}>{subtitle}</div>}
+            </div>
+            {clickable && <div style={{ color:d.color, fontSize:18, flexShrink:0 }}>›</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Active Trip Banner (appears on every page when there's an active/upcoming trip) ──
 function ActiveTripBanner({ bookings, poolRequests, onOpenChat, onOpenDetail }) {
   // Priority: active live trip > upcoming confirmed > searching driver > waiting for match
@@ -720,6 +770,10 @@ export default function PassengerDash(){
   },[]);
 
   useEffect(()=>{if(tab==='home'){loadActivePoolGroup();loadBookings();}},[tab]);
+
+  // Admin-controlled home screen cards
+  const [homeCards,setHomeCards]=useState([]);
+  useEffect(()=>{api.getHomeCards().then(setHomeCards).catch(()=>{});},[]);
 
   async function loadPendingDrivers(){
     setReviewLoading(true);
@@ -1096,6 +1150,7 @@ export default function PassengerDash(){
             </div>
 
             <div style={{marginTop:16}}>
+              <HomeCards cards={homeCards} />
               {activePoolChatRequest&&(
                 <div onClick={()=>{setTripDetailPool(activePoolChatRequest);setTripDetailBooking(null);setTripDetailOpen(true);}} style={{background:'linear-gradient(135deg,#0a0f1e,#0d1117)',border:'2px solid rgba(96,165,250,0.3)',borderRadius:20,padding:'16px 20px',marginBottom:14,display:'flex',alignItems:'center',gap:14,cursor:'pointer'}}>
                   <div style={{width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,#1d4ed8,#3b82f6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>👥</div>

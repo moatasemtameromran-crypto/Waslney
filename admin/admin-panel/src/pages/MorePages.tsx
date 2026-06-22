@@ -202,7 +202,7 @@ export function Homescreen() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ category: "Promotions", display_order: "1", active: true, user_type: "Customer", geofence_name: "Default", city: "Cairo" });
+  const [form, setForm] = useState({ category: "Promotions", display_order: "1", active: true, user_type: "Customer", geofence_name: "Default", city: "Cairo", title: "", subtitle: "", image_url: "", link_url: "" });
 
   const load = () => { setLoading(true); api.homescreen().then(d => setItems(Array.isArray(d) ? d : (d.items || []))).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
@@ -210,7 +210,7 @@ export function Homescreen() {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     await api.createHomescreenItem({ ...form, display_order: Number(form.display_order) });
-    setShowForm(false); load();
+    setShowForm(false); setForm({ category: "Promotions", display_order: "1", active: true, user_type: "Customer", geofence_name: "Default", city: "Cairo", title: "", subtitle: "", image_url: "", link_url: "" }); load();
   }
   async function toggleActive(id: number, active: boolean) { await api.updateHomescreenItem(id, { active: !active }); load(); }
   async function del(id: number) { if (confirm("Delete item?")) { await api.deleteHomescreenItem(id); load(); } }
@@ -232,16 +232,26 @@ export function Homescreen() {
             <div><label className="text-xs text-muted-foreground mb-1 block">City</label><input value={form.city} onChange={(e) => setForm({...form,city:e.target.value})} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
             <div className="flex items-center gap-2 pt-5"><input type="checkbox" id="active_hs" checked={form.active} onChange={(e) => setForm({...form,active:e.target.checked})} className="rounded accent-primary" /><label htmlFor="active_hs" className="text-sm">Active</label></div>
           </div>
+          <div className="border-t border-border pt-3 mt-1">
+            <p className="text-xs text-muted-foreground mb-2">Card content (optional — leave blank to use the category's default look)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs text-muted-foreground mb-1 block">Title</label><input value={form.title} onChange={(e) => setForm({...form,title:e.target.value})} placeholder="e.g. Ramadan Offer" className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+              <div><label className="text-xs text-muted-foreground mb-1 block">Subtitle</label><input value={form.subtitle} onChange={(e) => setForm({...form,subtitle:e.target.value})} placeholder="e.g. 20% off all trips" className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+              <div><label className="text-xs text-muted-foreground mb-1 block">Image URL</label><input value={form.image_url} onChange={(e) => setForm({...form,image_url:e.target.value})} placeholder="https://… (banner image)" className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+              <div><label className="text-xs text-muted-foreground mb-1 block">Link URL</label><input value={form.link_url} onChange={(e) => setForm({...form,link_url:e.target.value})} placeholder="https://… (opens when tapped)" className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            </div>
+          </div>
           <div className="flex gap-2 justify-end"><button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-secondary text-sm">Cancel</button><button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Create</button></div>
         </form>
       )}
       {loading ? <Spinner /> : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border"><th className="text-left px-5 py-3 text-muted-foreground font-medium">Category</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">User Type</th><th className="text-left px-5 py-3 text-muted-foreground font-medium hidden md:table-cell">Order</th><th className="text-left px-5 py-3 text-muted-foreground font-medium hidden sm:table-cell">City</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Active</th><th className="px-5 py-3" /></tr></thead>
-            <tbody>{items.length === 0 ? <tr><td colSpan={6} className="px-5 py-10 text-center text-muted-foreground">No homescreen items</td></tr> : items.map((h) => (
+            <thead><tr className="border-b border-border"><th className="text-left px-5 py-3 text-muted-foreground font-medium">Category</th><th className="text-left px-5 py-3 text-muted-foreground font-medium hidden md:table-cell">Title</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">User Type</th><th className="text-left px-5 py-3 text-muted-foreground font-medium hidden md:table-cell">Order</th><th className="text-left px-5 py-3 text-muted-foreground font-medium hidden sm:table-cell">City</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Active</th><th className="px-5 py-3" /></tr></thead>
+            <tbody>{items.length === 0 ? <tr><td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">No homescreen items</td></tr> : items.map((h) => (
               <tr key={h.id} className="border-b border-border/50 hover:bg-secondary/30">
                 <td className="px-5 py-3 font-medium">{h.category}</td>
+                <td className="px-5 py-3 text-muted-foreground hidden md:table-cell">{h.title || <span className="opacity-40">default</span>}</td>
                 <td className="px-5 py-3 text-muted-foreground">{h.user_type}</td>
                 <td className="px-5 py-3 text-muted-foreground hidden md:table-cell">{h.display_order}</td>
                 <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{h.city}</td>
