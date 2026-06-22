@@ -1,0 +1,60 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import authRouter from "./admin/auth";
+import dashboardRouter from "./admin/dashboard";
+import usersRouter from "./admin/users";
+import tripsRouter from "./admin/trips";
+import vehiclesRouter from "./admin/vehicles";
+import routesRouter from "./admin/routes";
+import stopsRouter from "./admin/stops";
+import fareRouter from "./admin/fare";
+import analyticsRouter from "./admin/analytics";
+import promotionsRouter from "./admin/promotions";
+import holidaysRouter from "./admin/holidays";
+import settingsRouter from "./admin/settings";
+import pushesRouter from "./admin/pushes";
+import vehicleTypesRouter from "./admin/vehicleTypes";
+import driverDocumentsRouter from "./admin/driverDocuments";
+import cancellationRouter from "./admin/cancellation";
+import shuttlePassRouter from "./admin/shuttlePass";
+import homescreenRouter from "./admin/homescreen";
+import shuttleTripsRouter from "./admin/shuttleTrips";
+import suggestedRoutesRouter from "./admin/suggestedRoutes";
+import citiesRouter from "./admin/cities";
+import accountsRouter from "./admin/accounts";
+import reviewRouter from "./admin/review";
+import manageBookingsRouter from "./admin/manageBookings";
+import tendersRouter from "./admin/tenders";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+
+// Admin routes
+router.use("/admin/auth", authRouter);
+router.use("/admin/dashboard", dashboardRouter);
+router.use("/admin/users", usersRouter);
+router.use("/admin/trips", tripsRouter);
+router.use("/admin/vehicles", vehiclesRouter);
+router.use("/admin/routes", routesRouter);
+router.use("/admin/stops", stopsRouter);
+router.use("/admin/fare", fareRouter);
+router.use("/admin/analytics", analyticsRouter);
+router.use("/admin/promotions", promotionsRouter);
+router.use("/admin/holidays", holidaysRouter);
+router.use("/admin/settings", settingsRouter);
+router.use("/admin/pushes", pushesRouter);
+router.use("/admin/vehicle-types", vehicleTypesRouter);
+router.use("/admin/driver-documents", driverDocumentsRouter);
+router.use("/admin/cancellation", cancellationRouter);
+router.use("/admin/shuttle-pass", shuttlePassRouter);
+router.use("/admin/homescreen", homescreenRouter);
+router.use("/admin/shuttle-trips", shuttleTripsRouter);
+router.use("/admin/suggested-routes", suggestedRoutesRouter);
+router.use("/admin/cities", citiesRouter);
+router.use("/admin/accounts", accountsRouter);
+router.use("/admin/review", reviewRouter);
+router.use("/admin/manage-bookings", manageBookingsRouter);
+router.use("/admin/tenders", tendersRouter);
+
+export default router;
