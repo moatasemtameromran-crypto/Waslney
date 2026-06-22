@@ -434,13 +434,11 @@ export default function DriverDash() {
                     ✅ Complete trip
                   </button>
                 )}
-                {/* Driver can always open chat from trip detail if pool trip */}
-                {selTrip.is_pool ? (
-                  <button onClick={() => openPoolChat(selTrip.id)}
-                    style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(29,78,216,0.2)', border:'1px solid #1e3a5f', borderRadius:10, padding:'9px 16px', fontSize:13, fontWeight:600, color:'#60a5fa', cursor:'pointer', fontFamily:"'Sora',sans-serif", marginBottom:16, width:'100%', justifyContent:'center' }}>
-                    💬 Open Group Chat
-                  </button>
-                ) : null}
+                {/* Driver can open chat with passengers on any trip */}
+                <button onClick={() => openPoolChat(selTrip.id)}
+                  style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(29,78,216,0.2)', border:'1px solid #1e3a5f', borderRadius:10, padding:'9px 16px', fontSize:13, fontWeight:600, color:'#60a5fa', cursor:'pointer', fontFamily:"'Sora',sans-serif", marginBottom:16, width:'100%', justifyContent:'center' }}>
+                  💬 {selTrip.is_pool ? 'Open Group Chat' : 'Chat with passengers'}
+                </button>
 
                 {/* ── PICKUP STOPS CHECKLIST ── */}
                 {selTrip.status === 'active' && (() => {

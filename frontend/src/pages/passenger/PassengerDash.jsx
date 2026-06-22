@@ -1132,7 +1132,7 @@ export default function PassengerDash(){
             <div style={{display:'flex',alignItems:'center',gap:10}}>
               <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1d4ed8,#3b82f6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>💬</div>
               <div>
-                <div style={{fontSize:15,fontWeight:700,color:'#fff',fontFamily:"'Sora',sans-serif"}}>Smart Pool Chat</div>
+                <div style={{fontSize:15,fontWeight:700,color:'#fff',fontFamily:"'Sora',sans-serif"}}>{myBookings.find(b=>b.trip_id===poolChat.tripId)?.is_pool===1?'Smart Pool Chat':'Trip Chat'}</div>
                 <div style={{fontSize:11,color:'#4b7ab5'}}>Trip #{poolChat.tripId}</div>
               </div>
             </div>
@@ -1612,10 +1612,10 @@ export default function PassengerDash(){
                       <div style={{fontSize:12,color:'#555'}}>{b.daily_driver_name||b.batch_driver_name||b.driver_name||b.daily_company_name||b.batch_company_name||'Driver TBD'} · {b.pickup_time}</div>
                       <div style={{fontSize:15,fontWeight:700,color:'#fbbf24'}}>{b.seats*(b.pool_price||b.price)} EGP</div>
                     </div>
-                    {b.is_pool===1&&(
+                    {(b.is_pool===1 || b.driver_name) && (
                       <button onClick={e=>{e.stopPropagation();openPoolChat(b.trip_id);}}
                         style={{marginTop:10,background:'rgba(29,78,216,0.15)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:8,padding:'7px 14px',color:'#60a5fa',fontSize:12,cursor:'pointer',fontFamily:"'Sora',sans-serif",width:'100%'}}>
-                        💬 Open Smart Pool Chat
+                        💬 {b.is_pool===1?'Open Smart Pool Chat':'Chat with driver'}
                       </button>
                     )}
                   </div>
@@ -1741,6 +1741,9 @@ export default function PassengerDash(){
                 <div style={{display:'flex',justifyContent:'space-between',padding:'12px 0'}}><span style={{color:'#555',fontSize:13}}>Total</span><span style={{color:'#fbbf24',fontWeight:700,fontSize:16}}>{b.seats*(b.pool_price||b.price)} EGP</span></div>
               </div>
               <button onClick={()=>openInvoice(b.id)} style={{width:'100%',background:'#161616',color:'#fbbf24',border:'1px solid #fbbf2433',borderRadius:12,padding:'14px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginBottom:10}}>🧾 View receipt</button>
+              {(b.is_pool===1||b.driver_name)&&(
+                <button onClick={()=>openPoolChat(b.trip_id)} style={{width:'100%',background:'rgba(29,78,216,0.15)',color:'#60a5fa',border:'1px solid rgba(96,165,250,0.25)',borderRadius:12,padding:'14px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginBottom:10}}>💬 {b.is_pool===1?'Open Smart Pool Chat':'Chat with driver'}</button>
+              )}
               <button style={{...btnDanger,width:'100%'}} onClick={()=>{cancelBooking(b.id);setSelBooking(null);sessionStorage.removeItem('selBookingId');}}>Cancel booking</button>
             </div>
           );

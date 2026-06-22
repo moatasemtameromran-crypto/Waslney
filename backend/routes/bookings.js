@@ -94,7 +94,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     const [rows] = await db.query(`
       SELECT b.*,
              t.from_loc, t.to_loc, t.pickup_time, t.dropoff_time, t.date, t.price,
-             t.status   AS trip_status,
+             t.status   AS trip_status, t.is_pool, t.driver_id,
              t.pickup_lat, t.pickup_lng, t.dropoff_lat, t.dropoff_lng,
              u.name     AS driver_name, u.car AS driver_car, u.plate AS driver_plate,
              c.status   AS checkin_status,
