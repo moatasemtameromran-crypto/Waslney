@@ -192,7 +192,12 @@ export interface RecentBooking { id: number; status: string; created_at: string;
 export interface User { id: number; name: string; phone: string; email: string; role: string; account_status: string; car?: string; plate?: string; profile_photo?: string; created_at: string; }
 export interface Driver extends User { avg_rating: number; total_trips: number; completed_trips: number; rejection_note?: string; }
 export interface Trip { id: number; origin: string; destination: string; departure_time: string; price: number; seats: number; status: string; is_pool: number; driver_name: string; driver_phone: string; confirmed_bookings?: number; created_at: string; }
-export interface AnalyticsSummary { totals: { total_bookings: number; revenue: number; total_trips: number; unique_passengers: number }; dailyRevenue: { date: string; revenue: number; bookings: number }[]; }
+export interface AnalyticsSummary {
+  totals: { total_bookings: number; revenue: number; total_trips: number; unique_passengers: number };
+  dailyRevenue: { date: string; revenue: number; bookings: number }[];
+  statusBreakdown?: { status: string; count: number }[];
+  topRoutes?: { route: string; bookings: number; revenue: number }[];
+}
 export interface Promotion { id: number; code: string; discount_type: string; discount_value: number; min_fare: number; max_uses: number; used_count: number; valid_from: string; valid_until: string; is_active: number; }
 export interface Holiday { id: number; name: string; date: string; surge_multiplier: number; }
 export interface VehicleType { id: number; name: string; capacity: number; base_fare: number; per_km_rate: number; is_active: number; }

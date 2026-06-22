@@ -102,7 +102,26 @@ router.get("/summary", requireAdminAuth, async (req, res) => {
       GROUP BY DATE(b.created_at) ORDER BY date ASC
     `, [days]) as any;
 
-    res.json({ totals, dailyRevenue });
+    // Booking status breakdown (for the donut chart)
+    const [statusBreakdown] = await db.query(`
+      SELECT b.status, COUNT(*) AS count
+      FROM bookings b
+      WHERE b.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY b.status
+    `, [days]) as any;
+
+    // Busiest routes (for the top-routes bar chart)
+    const [topRoutes] = await db.query(`
+      SELECT CONCAT(t.from_loc, ' → ', t.to_loc) AS route,
+             COUNT(b.id) AS bookings,
+             SUM(CASE WHEN b.status != 'cancelled' THEN t.price * b.seats ELSE 0 END) AS revenue
+      FROM bookings b JOIN trips t ON t.id = b.trip_id
+      WHERE b.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY t.from_loc, t.to_loc
+      ORDER BY bookings DESC LIMIT 6
+    `, [days]) as any;
+
+    res.json({ totals, dailyRevenue, statusBreakdown, topRoutes });
   } catch (err: any) {
     res.status(500).json({ error: "Server error" });
   }
