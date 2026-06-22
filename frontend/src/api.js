@@ -58,6 +58,11 @@ export const getMyTickets    = ()    => get('/support/tickets');
 export const createTicket    = (b)   => post('/support/ticket', b);
 export const suggestRoute    = (b)   => post('/support/suggest-route', b);
 
+// ── REFER & EARN / PROMOTIONS ─────────────────────────────
+export const getReferral     = ()    => get('/referrals/me');
+export const getRewards      = ()    => get('/referrals/rewards');
+export const redeemReferral  = (code)=> post('/referrals/redeem', { code });
+
 // ── CHECKINS ──────────────────────────────────────────────
 export const updateCheckin   = (bookingId, status) => put(`/checkins/${bookingId}`, { status });
 export const markStopArrived = (trip_id, stop_index) => post('/checkins/stop-arrived', { trip_id, stop_index });

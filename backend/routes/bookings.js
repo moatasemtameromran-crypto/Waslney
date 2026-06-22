@@ -138,7 +138,7 @@ router.get('/:id/invoice', requireAuth, async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT b.id, b.seats, b.effective_price, b.is_surge, b.status, b.pickup_note,
-             b.travel_date, b.created_at,
+             b.travel_date, b.created_at, b.discount_amount,
              t.from_loc, t.to_loc, t.pickup_time, t.price AS base_price,
              u.name AS passenger_name
       FROM bookings b
@@ -156,7 +156,8 @@ router.get('/:id/invoice', requireAuth, async (req, res) => {
     const perSeat = b.effective_price != null ? Number(b.effective_price) : base;
     const subtotal = base * seats;
     const surge    = b.is_surge ? Math.max(0, (perSeat - base) * seats) : 0;
-    const total    = perSeat * seats;
+    const discount = Number(b.discount_amount) || 0;
+    const total    = Math.max(0, perSeat * seats - discount);
     res.json({
       invoice_no: 'WSL-' + String(b.id).padStart(6, '0'),
       issued_at: b.created_at,
@@ -172,6 +173,7 @@ router.get('/:id/invoice', requireAuth, async (req, res) => {
       subtotal,
       surge_amount: surge,
       is_surge: !!b.is_surge,
+      discount_amount: discount,
       total,
       currency: 'EGP',
     });
@@ -253,7 +255,19 @@ router.post('/', requireAuth, requireRole('passenger'), async (req, res) => {
     const bookingId = result.insertId;
     await db.query('INSERT INTO checkins (booking_id) VALUES (?)', [bookingId]);
 
-    const passengerMsg = `Booking confirmed for ${dayName} ${travel_date}: ${trip.from_loc} → ${trip.to_loc}${isSurge ? ` (surge +${effectivePrice - trip.price} EGP)` : ''}`;
+    // Refer & Earn: apply best active discount voucher to this booking (non-fatal).
+    let discountApplied = 0;
+    try {
+      const gross = Number(effectivePrice) * seats;
+      const r = await require('./referrals').applyBestReward(req.user.id, gross, bookingId);
+      if (r.discount > 0) {
+        discountApplied = r.discount;
+        await db.query('UPDATE bookings SET discount_amount=?, reward_id=? WHERE id=?',
+          [r.discount, r.rewardId, bookingId]);
+      }
+    } catch (e) { console.error('reward apply:', e.message); }
+
+    const passengerMsg = `Booking confirmed for ${dayName} ${travel_date}: ${trip.from_loc} → ${trip.to_loc}${isSurge ? ` (surge +${effectivePrice - trip.price} EGP)` : ''}${discountApplied > 0 ? ` — ${discountApplied} EGP discount applied 🎉` : ''}`;
     await db.query('INSERT INTO notifications (user_id, message) VALUES (?,?)',
       [req.user.id, passengerMsg]);
     sendPushToUser(req.user.id, 'Booking confirmed ✓', passengerMsg).catch(()=>{});

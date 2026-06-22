@@ -852,6 +852,37 @@ export default function PassengerDash(){
     finally{setSupportBusy(false);}
   }
 
+  // Refer & Earn / Promotions
+  const [referView,setReferView]=useState(null); // null | 'refer' | 'promos'
+  const [referral,setReferral]=useState(null);
+  const [rewards,setRewards]=useState([]);
+  const [redeemInput,setRedeemInput]=useState('');
+  const [referBusy,setReferBusy]=useState(false);
+  async function openRefer(){
+    setReferView('refer');
+    try{const r=await api.getReferral();setReferral(r);}catch{}
+  }
+  async function openPromos(){
+    setReferView('promos');
+    try{const[r,rw]=await Promise.all([api.getReferral(),api.getRewards()]);setReferral(r);setRewards(Array.isArray(rw)?rw:[]);}catch{}
+  }
+  async function doRedeem(){
+    if(!redeemInput.trim()){notify('Enter a code','Type a friend\u2019s referral code.','error');return;}
+    setReferBusy(true);
+    try{const r=await api.redeemReferral(redeemInput.trim().toUpperCase());
+      setRedeemInput('');
+      const[ref,rw]=await Promise.all([api.getReferral(),api.getRewards()]);setReferral(ref);setRewards(Array.isArray(rw)?rw:[]);
+      notify('Code applied! \ud83c\udf89',`You earned ${r.reward_egp} EGP off your next trip.`,'success');
+    }catch(e){notify('Could not apply',e.message||'Invalid or already-used code.','error');}
+    finally{setReferBusy(false);}
+  }
+  function shareReferral(){
+    const code=referral?.code;if(!code)return;
+    const msg=`Join me on Waslney and we both get ${referral.reward_per_referral} EGP off! Use my code ${code} when you sign up.`;
+    if(navigator.share){navigator.share({title:'Waslney',text:msg}).catch(()=>{});}
+    else{navigator.clipboard?.writeText(msg).then(()=>notify('Copied','Invite text copied to clipboard.','success')).catch(()=>{});}
+  }
+
   async function loadPendingDrivers(){
     setReviewLoading(true);
     try{ const d=await api.getPendingDrivers(); setPendingDrivers(d.drivers||[]); }
@@ -1756,6 +1787,7 @@ export default function PassengerDash(){
                   <div style={{background:'#161616',border:'1px solid #222',borderRadius:14,padding:'10px 16px',marginBottom:16}}>
                     {row(`Base fare × ${invoice.seats} seat${invoice.seats>1?'s':''}`,money(invoice.subtotal))}
                     {invoice.is_surge&&invoice.surge_amount>0&&row('Surge',`+ ${money(invoice.surge_amount)}`)}
+                    {invoice.discount_amount>0&&(<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',fontSize:13.5}}><span style={{color:'#4ade80'}}>Discount</span><span style={{color:'#4ade80',fontWeight:600}}>- {money(invoice.discount_amount)}</span></div>)}
                     <div style={{height:1,background:'#2a2a2a',margin:'4px 0'}}/>
                     {row('Total',money(invoice.total),true)}
                   </div>
@@ -1898,6 +1930,13 @@ export default function PassengerDash(){
               <DetailRow label="Smart Pool requests" val={myPoolRequests.length}/>
             </div>
             <div style={{...card,marginBottom:14}}>
+              <p style={sectSt}>Rewards</p>
+              <button onClick={openRefer} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',borderBottom:'1px solid #1a1a1a',padding:'14px 0',color:'#fff',fontSize:14,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+                <span>🎁 Refer &amp; Earn</span><span style={{color:'#555'}}>›</span></button>
+              <button onClick={openPromos} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',padding:'14px 0',color:'#fff',fontSize:14,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+                <span>🏷️ Promotions &amp; discounts</span><span style={{color:'#555'}}>›</span></button>
+            </div>
+            <div style={{...card,marginBottom:14}}>
               <p style={sectSt}>Help</p>
               <button onClick={openHelp} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',borderBottom:'1px solid #1a1a1a',padding:'14px 0',color:'#fff',fontSize:14,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
                 <span>🆘 Help & Support</span><span style={{color:'#555'}}>›</span></button>
@@ -1960,6 +1999,77 @@ export default function PassengerDash(){
                 style={{width:'100%',boxSizing:'border-box',background:'#161616',border:'1px solid #222',borderRadius:12,padding:'13px 14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:14,outline:'none',resize:'none',height:80,marginBottom:12}}/>
               <button onClick={submitSuggestRoute} disabled={supportBusy} style={{...btnPrimary,width:'100%',opacity:supportBusy?.6:1}}>{supportBusy?'Submitting…':'Submit suggestion'}</button>
               <button onClick={()=>setSupportView(null)} style={{width:'100%',background:'#161616',color:'#aaa',border:'1px solid #222',borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginTop:10}}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── REFER & EARN MODAL ── */}
+        {referView==='refer'&&(
+          <div onClick={()=>setReferView(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:600,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'#0f0f0f',borderTopLeftRadius:24,borderTopRightRadius:24,borderTop:'1px solid #fbbf2433',padding:'20px 20px 32px',maxHeight:'90vh',overflowY:'auto'}}>
+              <div style={{width:40,height:4,borderRadius:2,background:'#333',margin:'0 auto 18px'}}/>
+              <div style={{textAlign:'center',marginBottom:18}}>
+                <div style={{fontSize:40,marginBottom:6}}>🎁</div>
+                <h2 style={{fontSize:20,fontWeight:800,color:'#fff'}}>Refer &amp; Earn</h2>
+                <p style={{fontSize:13,color:'#888',marginTop:4}}>You and your friend each get <b style={{color:'#fbbf24'}}>{referral?.reward_per_referral||25} EGP</b> off when they join with your code.</p>
+              </div>
+              <div style={{background:'linear-gradient(135deg,#1a1407,#0f0f0f)',border:'1px dashed #fbbf2466',borderRadius:16,padding:'18px',textAlign:'center',marginBottom:14}}>
+                <div style={{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8}}>Your code</div>
+                <div style={{fontSize:28,fontWeight:800,color:'#fbbf24',letterSpacing:'.12em'}}>{referral?.code||'…'}</div>
+              </div>
+              <div style={{display:'flex',gap:10,marginBottom:18}}>
+                <button onClick={()=>{navigator.clipboard?.writeText(referral?.code||'').then(()=>notify('Copied','Code copied.','success'));}} style={{flex:1,background:'#161616',color:'#fff',border:'1px solid #222',borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>Copy code</button>
+                <button onClick={shareReferral} style={{flex:1,...btnPrimary,padding:'13px'}}>Share invite</button>
+              </div>
+              <div style={{display:'flex',gap:10,marginBottom:18}}>
+                <div style={{flex:1,background:'#161616',border:'1px solid #222',borderRadius:12,padding:'14px',textAlign:'center'}}>
+                  <div style={{fontSize:22,fontWeight:800,color:'#fff'}}>{referral?.referred_count??0}</div>
+                  <div style={{fontSize:11,color:'#888',marginTop:2}}>Friends joined</div>
+                </div>
+                <div style={{flex:1,background:'#161616',border:'1px solid #222',borderRadius:12,padding:'14px',textAlign:'center'}}>
+                  <div style={{fontSize:22,fontWeight:800,color:'#4ade80'}}>{referral?.active_discount_egp??0} EGP</div>
+                  <div style={{fontSize:11,color:'#888',marginTop:2}}>Available discount</div>
+                </div>
+              </div>
+              {referral&&referral.referred_count===0&&(!referral.rewards||!referral.rewards.some(r=>r.source&&r.source.toLowerCase().includes('welcome')))&&(
+                <div style={{background:'#161616',border:'1px solid #222',borderRadius:12,padding:'14px',marginBottom:14}}>
+                  <div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:8}}>Have a friend&rsquo;s code?</div>
+                  <div style={{display:'flex',gap:8}}>
+                    <input value={redeemInput} onChange={e=>setRedeemInput(e.target.value.toUpperCase())} placeholder="Enter code"
+                      style={{flex:1,boxSizing:'border-box',background:'#0f0f0f',border:'1px solid #222',borderRadius:10,padding:'12px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:14,outline:'none',letterSpacing:'.06em'}}/>
+                    <button onClick={doRedeem} disabled={referBusy} style={{...btnPrimary,padding:'12px 16px',opacity:referBusy?.6:1}}>{referBusy?'…':'Apply'}</button>
+                  </div>
+                </div>
+              )}
+              <button onClick={()=>setReferView(null)} style={{width:'100%',background:'#161616',color:'#aaa',border:'1px solid #222',borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>Close</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── PROMOTIONS MODAL ── */}
+        {referView==='promos'&&(
+          <div onClick={()=>setReferView(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:600,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'#0f0f0f',borderTopLeftRadius:24,borderTopRightRadius:24,borderTop:'1px solid #fbbf2433',padding:'20px 20px 32px',maxHeight:'90vh',overflowY:'auto'}}>
+              <div style={{width:40,height:4,borderRadius:2,background:'#333',margin:'0 auto 18px'}}/>
+              <h2 style={{fontSize:20,fontWeight:800,color:'#fff',marginBottom:4}}>🏷️ Promotions &amp; discounts</h2>
+              <p style={{fontSize:13,color:'#888',marginBottom:16}}>Active discounts apply automatically to your next booking.</p>
+              {rewards.length===0?(
+                <div style={{textAlign:'center',padding:'30px 0',color:'#666'}}>
+                  <div style={{fontSize:40,marginBottom:10}}>🎟️</div>
+                  <div style={{fontSize:14,color:'#888'}}>No active discounts yet.</div>
+                  <div style={{fontSize:12.5,color:'#555',marginTop:6}}>Invite friends with Refer &amp; Earn to get {referral?.reward_per_referral||25} EGP off.</div>
+                </div>
+              ):rewards.map(r=>(
+                <div key={r.id} style={{display:'flex',alignItems:'center',gap:14,background:'linear-gradient(135deg,#0c1f12,#0f0f0f)',border:'1px solid #4ade8033',borderRadius:14,padding:'14px 16px',marginBottom:10}}>
+                  <div style={{width:46,height:46,borderRadius:12,background:'rgba(74,222,128,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>🎟️</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:16,fontWeight:800,color:'#4ade80'}}>{Number(r.amount_egp)} EGP off</div>
+                    <div style={{fontSize:12,color:'#888',marginTop:2}}>{r.source||'Discount voucher'}</div>
+                  </div>
+                </div>
+              ))}
+              <button onClick={()=>{setReferView(null);openRefer();}} style={{width:'100%',...btnPrimary,marginTop:8}}>🎁 Get more — Refer &amp; Earn</button>
+              <button onClick={()=>setReferView(null)} style={{width:'100%',background:'#161616',color:'#aaa',border:'1px solid #222',borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginTop:10}}>Close</button>
             </div>
           </div>
         )}

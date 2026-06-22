@@ -99,7 +99,7 @@ export default function Landing({ onEnterCompanyPortal }) {
   // mode: home | signup | docs | otp | login | driver-status
   const [mode,         setMode]         = useState('home');
   const [role,         setRole]         = useState('');
-  const [form,         setForm]         = useState({ name: '', phone: '', email: '', password: '', car: '', plate: '' });
+  const [form,         setForm]         = useState({ name: '', phone: '', email: '', password: '', car: '', plate: '', referral_code: '' });
   const [docs,         setDocs]         = useState({ profile: '', carLicense: '', driverLicense: '', criminal: '' });
   const [docErr,       setDocErr]       = useState({});
   const [otp,          setOtp]          = useState(['','','','','','']);
@@ -209,7 +209,7 @@ export default function Landing({ onEnterCompanyPortal }) {
   }
 
   function reset() {
-    setForm({ name:'', phone:'', email:'', password:'', car:'', plate:'' });
+    setForm({ name:'', phone:'', email:'', password:'', car:'', plate:'', referral_code:'' });
     setDocs({ profile:'', carLicense:'', driverLicense:'', criminal:'' });
     setDocErr({}); setOtp(['','','','','','']); setDevOtp('');
   }
@@ -341,6 +341,9 @@ export default function Landing({ onEnterCompanyPortal }) {
           </button>
         </div>
       </div>
+      {role !== 'driver' && (
+        <Inp label="Referral code (optional)" value={form.referral_code} onChange={f('referral_code')} placeholder="Friend's code — you both save" />
+      )}
       {role === 'driver' && <>
         <Inp label="Car model"     value={form.car}   onChange={f('car')}   placeholder="Toyota Hiace 2022" />
         <Inp label="License plate" value={form.plate} onChange={f('plate')} placeholder="أ ب ج 1234" />

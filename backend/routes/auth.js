@@ -98,6 +98,13 @@ router.post('/register', async (req, res) => {
     }
 
     const token = signToken(user);
+
+    // Refer & Earn: if a referral code was provided, link + grant vouchers (non-fatal).
+    if (req.body.referral_code) {
+      try { await require('./referrals').applyReferralOnSignup(userId, req.body.referral_code); }
+      catch (e) { console.error('referral on signup:', e.message); }
+    }
+
     res.json({ ok: true, user, token });
 
   } catch (e) {
