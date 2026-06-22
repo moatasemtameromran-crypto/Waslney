@@ -101,3 +101,8 @@ export const deleteSavedPoint  = (id)        => del(`/saved-points/${id}`);
 
 // ── HOME SCREEN CARDS (admin-controlled) ──────────────────
 export const getHomeCards      = ()          => get('/homescreen');
+
+// ── PERSONAL SAVED ADDRESSES (Home / Work / custom) ───────
+export const getAddresses      = ()          => get('/addresses');
+export const saveAddress       = (body)      => post('/addresses', body);
+export const deleteAddress     = (id)        => del(`/addresses/${id}`);

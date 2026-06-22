@@ -63,6 +63,25 @@ function PlaceSearch({placeholder,icon,value,onChange}){
   );
 }
 
+function SavedAddressChips({addresses,hasDest,onPick,onSave,onDelete}){
+  const home=addresses.find(a=>a.kind==='home');
+  const work=addresses.find(a=>a.kind==='work');
+  const others=addresses.filter(a=>a.kind==='other');
+  const chip=(bg,bd,col)=>({display:'inline-flex',alignItems:'center',gap:5,background:bg,border:`1px solid ${bd}`,borderRadius:20,padding:'7px 12px',fontSize:12.5,fontWeight:600,color:col,cursor:'pointer',fontFamily:"'Sora',sans-serif",whiteSpace:'nowrap',transition:'all .15s'});
+  function quick(a){return(<div key={a.id} onClick={()=>onPick(a)} style={chip('#161616','#2a2a2a','#ddd')}
+    onMouseEnter={e=>e.currentTarget.style.borderColor='#fbbf2466'} onMouseLeave={e=>e.currentTarget.style.borderColor='#2a2a2a'}>
+    <span>{a.kind==='home'?'🏠':a.kind==='work'?'💼':'📍'}</span><span>{a.label}</span>
+    <span onClick={e=>{e.stopPropagation();onDelete(a.id);}} style={{color:'#555',fontSize:14,marginLeft:2,lineHeight:1}}>×</span></div>);}
+  return(
+    <div style={{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center'}}>
+      {home?quick(home):<div onClick={()=>onSave('home')} style={{...chip('transparent','#2a2a2a','#888'),opacity:hasDest?1:.5}}>🏠 <span>Set Home</span></div>}
+      {work?quick(work):<div onClick={()=>onSave('work')} style={{...chip('transparent','#2a2a2a','#888'),opacity:hasDest?1:.5}}>💼 <span>Set Work</span></div>}
+      {others.map(quick)}
+      {hasDest&&<div onClick={()=>onSave('other')} style={chip('transparent','#fbbf2433','#fbbf24')}>＋ Save place</div>}
+    </div>
+  );
+}
+
 function SmartPoolBanner({onClick}){
   return(
     <div onClick={onClick} style={{background:'linear-gradient(135deg,#0c1a35 0%,#0f2347 50%,#0c1a35 100%)',border:'1px solid rgba(96,165,250,0.25)',borderRadius:16,padding:'14px 16px',marginBottom:20,cursor:'pointer',transition:'all .2s',position:'relative',overflow:'hidden'}}
@@ -775,6 +794,20 @@ export default function PassengerDash(){
   const [homeCards,setHomeCards]=useState([]);
   useEffect(()=>{api.getHomeCards().then(setHomeCards).catch(()=>{});},[]);
 
+  // Personal saved addresses (Home / Work / custom)
+  const [addresses,setAddresses]=useState([]);
+  async function loadAddresses(){try{const r=await api.getAddresses();setAddresses(Array.isArray(r)?r:[]);}catch{}}
+  useEffect(()=>{loadAddresses();},[]);
+  async function saveAddr(kind,coord){
+    if(!coord){notify('Pick a place first','Choose a location in "Where to?" to save it.','error');return;}
+    try{
+      await api.saveAddress({kind,label:kind==='home'?'Home':kind==='work'?'Work':(coord.name||'Saved').slice(0,60),address:coord.name,lat:coord.lat,lng:coord.lng});
+      await loadAddresses();
+      notify('Saved','Address saved for quick access.','success');
+    }catch{notify('Error','Could not save address.','error');}
+  }
+  async function delAddr(id){try{await api.deleteAddress(id);await loadAddresses();}catch{}}
+
   async function loadPendingDrivers(){
     setReviewLoading(true);
     try{ const d=await api.getPendingDrivers(); setPendingDrivers(d.drivers||[]); }
@@ -1141,6 +1174,9 @@ export default function PassengerDash(){
                     <PlaceSearch icon="🏁" placeholder="Where to?" value={toCoord} onChange={setToCoord}/>
                   </div>
                 </div>
+                <SavedAddressChips addresses={addresses} hasDest={!!toCoord}
+                  onPick={a=>setToCoord({lat:parseFloat(a.lat),lng:parseFloat(a.lng),name:a.address||a.label})}
+                  onSave={kind=>saveAddr(kind,toCoord)} onDelete={delAddr}/>
                 <button onClick={searchTrips} disabled={searching||!toCoord}
                   style={{background:toCoord?'#fbbf24':'#1a1a1a',color:toCoord?'#000':'#555',border:'none',borderRadius:12,padding:'14px',fontSize:14,fontWeight:700,cursor:toCoord?'pointer':'default',fontFamily:"'Sora',sans-serif",marginTop:4,transition:'all .2s'}}>
                   {searching?'Searching…':'🔍 Find trips near me'}

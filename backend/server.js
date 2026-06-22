@@ -30,6 +30,7 @@ app.use('/api/pool',           require('./routes/pool'));
 app.use('/api/saved-points', require('./routes/saved_points'));
 app.use('/api/tender',       require('./routes/tender'));
 app.use('/api/homescreen',   require('./routes/homescreen'));
+app.use('/api/addresses',    require('./routes/user_addresses'));
 // ── SOCKET.IO REAL-TIME TRACKING ──────────────────────────
 require('./socket/tracking')(io);
 
