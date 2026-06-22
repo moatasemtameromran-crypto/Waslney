@@ -87,11 +87,7 @@ export default function Analytics() {
               </div>
               <span className="text-xs text-muted-foreground">EGP {Number(t?.revenue || 0).toLocaleString()} total</span>
             </div>
-            {revenueSeries.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data for this period</div>
-            ) : (
-              <AreaChart data={revenueSeries} color="#fbbf24" label="revenue" valuePrefix="EGP " height={220} />
-            )}
+            <AreaChart data={revenueSeries} color="#fbbf24" label="revenue" valuePrefix="EGP " height={220} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -101,11 +97,7 @@ export default function Analytics() {
                 <TrendingUp size={16} className="text-blue-400" />
                 <h2 className="font-semibold text-foreground">Bookings Over Time</h2>
               </div>
-              {bookingSeries.length === 0 ? (
-                <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">No data</div>
-              ) : (
-                <AreaChart data={bookingSeries} color="#60a5fa" label="bookings" height={180} />
-              )}
+              <AreaChart data={bookingSeries} color="#60a5fa" label="bookings" height={180} />
             </div>
 
             {/* Status donut */}
@@ -114,11 +106,7 @@ export default function Analytics() {
                 <PieChart size={16} className="text-green-400" />
                 <h2 className="font-semibold text-foreground">Booking Status</h2>
               </div>
-              {donutSegments.length === 0 ? (
-                <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">No bookings yet</div>
-              ) : (
-                <div className="flex justify-center py-2"><DonutChart segments={donutSegments} /></div>
-              )}
+              <div className="flex justify-center py-2"><DonutChart segments={donutSegments} /></div>
             </div>
           </div>
 
