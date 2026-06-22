@@ -51,6 +51,7 @@ export const bookTrip        = (b)   => post('/bookings', b);
 export const cancelBooking   = (id)  => put(`/bookings/${id}/cancel`);
 export const getTripBookings = (tid) => get(`/bookings/trip/${tid}`);
 export const getInvoice      = (id)  => get(`/bookings/${id}/invoice`);
+export const getSeatMap      = (tripId, date) => get(`/bookings/seatmap?trip_id=${tripId}&travel_date=${date}`);
 
 // ── HELP & SUPPORT ────────────────────────────────────────
 export const getFaq          = ()    => get('/support/faq');

@@ -668,6 +668,23 @@ export default function PassengerDash(){
   const[loadingB,setLoadingB]=useState(false);
   const[seats,setSeats]=useState(1);
   const[booking,setBooking]=useState(false);
+  const[seatMap,setSeatMap]=useState(null);      // {total_seats, taken:[]}
+  const[selectedSeats,setSelectedSeats]=useState([]);
+  useEffect(()=>{
+    setSelectedSeats([]);setSeatMap(null);
+    if(selTrip&&travelDate){
+      api.getSeatMap(selTrip.id,travelDate).then(setSeatMap).catch(()=>setSeatMap(null));
+    }
+  // eslint-disable-next-line
+  },[selTrip&&selTrip.id,travelDate]);
+  function toggleSeat(n){
+    setSelectedSeats(prev=>{
+      const has=prev.includes(n);
+      const next=has?prev.filter(x=>x!==n):[...prev,n];
+      setSeats(next.length||1);
+      return next;
+    });
+  }
 
   // Rating
   const[rateTrip,setRateTrip]=useState(null);
@@ -992,7 +1009,7 @@ export default function PassengerDash(){
     if(!travelDate){notify('Select a day','Please select which day you want to travel.','error');return;}
     setBooking(true);
     try{
-      await api.bookTrip({trip_id:selTrip.id,seats,pickup_note:fromCoord?.name||selPickup?.label||'',travel_date:travelDate});
+      await api.bookTrip({trip_id:selTrip.id,seats,pickup_note:fromCoord?.name||selPickup?.label||'',travel_date:travelDate,...(selectedSeats.length?{seat_numbers:selectedSeats}:{})});
       setSelTrip(null);setTravelDate('');setWeekSchedule(null);changeTab('activity');
       loadBookings();
       notify('Booking confirmed!',`${travelDate} · Pickup at ${selTrip.pickup_time}`);
@@ -1569,10 +1586,40 @@ export default function PassengerDash(){
             <div style={{...card,marginBottom:20}}>
               <p style={sectSt}>Reserve seats</p>
               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:24,padding:'12px 0'}}>
-                <button onClick={()=>setSeats(s=>Math.max(1,s-1))} style={{width:44,height:44,borderRadius:22,border:'1px solid #333',background:'transparent',color:'#fff',fontSize:20,cursor:'pointer'}}>−</button>
+                <button onClick={()=>{setSelectedSeats([]);setSeats(s=>Math.max(1,s-1));}} style={{width:44,height:44,borderRadius:22,border:'1px solid #333',background:'transparent',color:'#fff',fontSize:20,cursor:'pointer'}}>−</button>
                 <span style={{fontSize:32,fontWeight:800,color:'#fff',minWidth:40,textAlign:'center'}}>{seats}</span>
-                <button onClick={()=>setSeats(s=>Math.min(selTrip.total_seats,s+1))} style={{width:44,height:44,borderRadius:22,border:'1px solid #333',background:'transparent',color:'#fff',fontSize:20,cursor:'pointer'}}>+</button>
+                <button onClick={()=>{setSelectedSeats([]);setSeats(s=>Math.min(selTrip.total_seats,s+1));}} style={{width:44,height:44,borderRadius:22,border:'1px solid #333',background:'transparent',color:'#fff',fontSize:20,cursor:'pointer'}}>+</button>
               </div>
+              {travelDate&&seatMap&&(
+                <div style={{marginTop:8,borderTop:'1px solid #1a1a1a',paddingTop:16}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                    <span style={{fontSize:13,color:'#aaa',fontWeight:600}}>Pick your seats <span style={{color:'#555',fontWeight:400}}>(optional)</span></span>
+                    <span style={{fontSize:12,color:'#fbbf24'}}>{selectedSeats.length?`${selectedSeats.length} selected`:`${(seatMap.total_seats-seatMap.taken.length)} free`}</span>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'center',marginBottom:10}}>
+                    <div style={{fontSize:20}}>🚐</div>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+                    {Array.from({length:seatMap.total_seats}).map((_,i)=>{
+                      const n=i+1;const taken=seatMap.taken.includes(n);const sel=selectedSeats.includes(n);
+                      return(
+                        <button key={n} disabled={taken} onClick={()=>toggleSeat(n)}
+                          style={{aspectRatio:'1',borderRadius:10,fontSize:13,fontWeight:700,fontFamily:"'Sora',sans-serif",cursor:taken?'not-allowed':'pointer',
+                            border:sel?'1px solid #fbbf24':taken?'1px solid #1a1a1a':'1px solid #333',
+                            background:sel?'#fbbf24':taken?'#161616':'transparent',
+                            color:sel?'#000':taken?'#444':'#fff',position:'relative'}}>
+                          {taken?'✕':n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:12,fontSize:11,color:'#666'}}>
+                    <span><span style={{display:'inline-block',width:10,height:10,borderRadius:3,border:'1px solid #333',marginRight:5,verticalAlign:'middle'}}/>Free</span>
+                    <span><span style={{display:'inline-block',width:10,height:10,borderRadius:3,background:'#fbbf24',marginRight:5,verticalAlign:'middle'}}/>Selected</span>
+                    <span><span style={{display:'inline-block',width:10,height:10,borderRadius:3,background:'#161616',border:'1px solid #1a1a1a',marginRight:5,verticalAlign:'middle'}}/>Taken</span>
+                  </div>
+                </div>
+              )}
             </div>
             {!travelDate&&<div style={{textAlign:'center',fontSize:12,color:'#f87171',marginBottom:12}}>⬆ Select a travel day above first</div>}
             <button onClick={confirmBook} disabled={booking||!travelDate} style={{...btnPrimary,opacity:(booking||!travelDate)?0.4:1}}>
@@ -1755,7 +1802,7 @@ export default function PassengerDash(){
                     <DetailRow label="Car" val={b.driver_car}/>
                   </>
                 )}
-                <DetailRow label="Seats" val={b.seats}/>
+                <DetailRow label="Seats" val={b.seat_numbers?`${b.seats} (#${b.seat_numbers.split(',').join(', #')})`:b.seats}/>
                 <DetailRow label="Pickup time" val={b.pickup_time} accent="#fbbf24"/>
                 <div style={{display:'flex',justifyContent:'space-between',padding:'12px 0'}}><span style={{color:'#555',fontSize:13}}>Total</span><span style={{color:'#fbbf24',fontWeight:700,fontSize:16}}>{b.seats*(b.pool_price||b.price)} EGP</span></div>
               </div>
@@ -1805,6 +1852,7 @@ export default function PassengerDash(){
                     {row('Travel date',fmtDate(invoice.travel_date))}
                     {row('Pickup time',invoice.pickup_time||'—')}
                     {row('Status',(invoice.status||'').toUpperCase())}
+                    {invoice.seat_numbers&&row('Seats',`#${invoice.seat_numbers.split(',').join(', #')}`)}
                   </div>
                   <div style={{background:'#161616',border:'1px solid #222',borderRadius:14,padding:'10px 16px',marginBottom:16}}>
                     {row(`Base fare × ${invoice.seats} seat${invoice.seats>1?'s':''}`,money(invoice.subtotal))}

@@ -7,6 +7,38 @@ function getIo() {
   try { return require('../server').io; } catch(_) { return null; }
 }
 
+// Ensure the seat_numbers column exists (for seat selection). Self-migrating.
+let seatColReady = false;
+async function ensureSeatColumn() {
+  if (seatColReady) return;
+  try {
+    const [c] = await db.query(
+      "SELECT COUNT(*) n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bookings' AND COLUMN_NAME='seat_numbers'"
+    );
+    if (c[0].n === 0) await db.query("ALTER TABLE bookings ADD COLUMN seat_numbers VARCHAR(80) DEFAULT NULL");
+  } catch (e) { console.error('ensureSeatColumn:', e.message); }
+  seatColReady = true;
+}
+
+// Parse a stored seat_numbers string into an int array.
+function parseSeats(s) {
+  if (!s) return [];
+  return String(s).split(',').map(x => parseInt(x.trim(), 10)).filter(n => Number.isInteger(n));
+}
+
+// Taken seat numbers for a trip on a date (from confirmed bookings).
+async function takenSeats(tripId, travelDate, excludeBookingId) {
+  await ensureSeatColumn();
+  const params = [tripId, travelDate];
+  let sql = "SELECT seat_numbers FROM bookings WHERE trip_id=? AND travel_date=? AND status='confirmed'";
+  if (excludeBookingId) { sql += ' AND id<>?'; params.push(excludeBookingId); }
+  const [rows] = await db.query(sql, params);
+  const set = new Set();
+  rows.forEach(r => parseSeats(r.seat_numbers).forEach(n => set.add(n)));
+  return set;
+}
+
+
 // ── Booking Settings helpers ────────────────────────────────────────────────
 async function getBookingSettings() {
   try {
@@ -88,6 +120,18 @@ router.get('/week-schedule', requireAuth, async (req, res) => {
   } catch(err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
+// GET /api/bookings/seatmap?trip_id=&travel_date= — taken seats for a date
+router.get('/seatmap', requireAuth, async (req, res) => {
+  const { trip_id, travel_date } = req.query;
+  if (!trip_id || !travel_date) return res.status(400).json({ error: 'trip_id and travel_date required' });
+  try {
+    const [tr] = await db.query('SELECT total_seats FROM trips WHERE id=?', [trip_id]);
+    if (!tr.length) return res.status(404).json({ error: 'Trip not found' });
+    const taken = await takenSeats(trip_id, travel_date);
+    res.json({ total_seats: tr[0].total_seats, taken: Array.from(taken).sort((a, b) => a - b) });
+  } catch (err) { console.error('seatmap:', err.message); res.status(500).json({ error: 'Server error' }); }
+});
+
 // GET /api/bookings/mine
 router.get('/mine', requireAuth, async (req, res) => {
   try {
@@ -138,7 +182,7 @@ router.get('/:id/invoice', requireAuth, async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT b.id, b.seats, b.effective_price, b.is_surge, b.status, b.pickup_note,
-             b.travel_date, b.created_at, b.discount_amount,
+             b.travel_date, b.created_at, b.discount_amount, b.seat_numbers,
              t.from_loc, t.to_loc, t.pickup_time, t.price AS base_price,
              u.name AS passenger_name
       FROM bookings b
@@ -170,6 +214,7 @@ router.get('/:id/invoice', requireAuth, async (req, res) => {
       seats,
       base_fare_per_seat: base,
       effective_per_seat: perSeat,
+      seat_numbers: b.seat_numbers || null,
       subtotal,
       surge_amount: surge,
       is_surge: !!b.is_surge,
@@ -203,7 +248,7 @@ router.get('/all-day-bookings', requireAuth, requireRole('admin'), async (req, r
 
 // POST /api/bookings — book for a specific travel_date
 router.post('/', requireAuth, requireRole('passenger'), async (req, res) => {
-  const { trip_id, seats, pickup_note, travel_date } = req.body;
+  const { trip_id, seats, pickup_note, travel_date, seat_numbers } = req.body;
   if (!trip_id || !seats) return res.status(400).json({ error: 'trip_id and seats required' });
   if (!travel_date) return res.status(400).json({ error: 'travel_date required (YYYY-MM-DD)' });
   if (seats < 1 || seats > 16) return res.status(400).json({ error: 'Invalid seat count' });
@@ -243,14 +288,30 @@ router.post('/', requireAuth, requireRole('passenger'), async (req, res) => {
       });
     }
 
+    // ── Optional seat selection ──────────────────────────────────────────────
+    let seatStr = null;
+    if (Array.isArray(seat_numbers) && seat_numbers.length) {
+      const picked = seat_numbers.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n));
+      const uniq = [...new Set(picked)];
+      if (uniq.length !== seats)
+        return res.status(400).json({ error: 'Pick exactly the number of seats you are booking' });
+      if (uniq.some(n => n < 1 || n > trip.total_seats))
+        return res.status(400).json({ error: 'Invalid seat number' });
+      const taken = await takenSeats(trip_id, travel_date);
+      const clash = uniq.filter(n => taken.has(n));
+      if (clash.length) return res.status(409).json({ error: `Seat ${clash.join(', ')} just got taken — pick another` });
+      seatStr = uniq.sort((a, b) => a - b).join(',');
+    }
+
     const effectivePrice = await computePrice(trip.price, travel_date);
     const isSurge = effectivePrice > trip.price;
     const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     const dayName = dayNames[new Date(travel_date).getDay()];
 
+    await ensureSeatColumn();
     const [result] = await db.query(
-      'INSERT INTO bookings (trip_id, passenger_id, seats, pickup_note, travel_date, effective_price, is_surge) VALUES (?,?,?,?,?,?,?)',
-      [trip_id, req.user.id, seats, pickup_note || null, travel_date, effectivePrice, isSurge ? 1 : 0]
+      'INSERT INTO bookings (trip_id, passenger_id, seats, pickup_note, travel_date, effective_price, is_surge, seat_numbers) VALUES (?,?,?,?,?,?,?,?)',
+      [trip_id, req.user.id, seats, pickup_note || null, travel_date, effectivePrice, isSurge ? 1 : 0, seatStr]
     );
     const bookingId = result.insertId;
     await db.query('INSERT INTO checkins (booking_id) VALUES (?)', [bookingId]);
