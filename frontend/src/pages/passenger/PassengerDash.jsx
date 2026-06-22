@@ -808,6 +808,16 @@ export default function PassengerDash(){
   }
   async function delAddr(id){try{await api.deleteAddress(id);await loadAddresses();}catch{}}
 
+  // Booking invoice / receipt
+  const [invoice,setInvoice]=useState(null);
+  const [invoiceLoading,setInvoiceLoading]=useState(false);
+  async function openInvoice(id){
+    setInvoiceLoading(true);setInvoice(null);
+    try{const r=await api.getInvoice(id);setInvoice(r);}
+    catch{notify('Error','Could not load receipt.','error');}
+    finally{setInvoiceLoading(false);}
+  }
+
   async function loadPendingDrivers(){
     setReviewLoading(true);
     try{ const d=await api.getPendingDrivers(); setPendingDrivers(d.drivers||[]); }
@@ -1552,8 +1562,11 @@ export default function PassengerDash(){
                     <div style={{fontSize:14,fontWeight:600,color:'#fff',marginBottom:4}}>{b.from_loc} → {b.to_loc}</div>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                       <span style={{fontSize:12,color:'#555'}}>{b.seats} seats · {b.seats*(b.pool_price||b.price)} EGP</span>
-                      {b.status==='completed'&&!b.rated&&(<button onClick={()=>setRateTrip(b)} style={{background:'rgba(251,191,36,0.1)',border:'1px solid #fbbf2444',borderRadius:8,padding:'5px 12px',color:'#fbbf24',fontSize:12,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>Rate ★</button>)}
-                      {b.rated&&<span style={{fontSize:12,color:'#fbbf24'}}>★ Rated</span>}
+                      <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                        <button onClick={()=>openInvoice(b.id)} style={{background:'transparent',border:'1px solid #2a2a2a',borderRadius:8,padding:'5px 12px',color:'#aaa',fontSize:12,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>🧾 Receipt</button>
+                        {b.status==='completed'&&!b.rated&&(<button onClick={()=>setRateTrip(b)} style={{background:'rgba(251,191,36,0.1)',border:'1px solid #fbbf2444',borderRadius:8,padding:'5px 12px',color:'#fbbf24',fontSize:12,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>Rate ★</button>)}
+                        {b.rated&&<span style={{fontSize:12,color:'#fbbf24'}}>★ Rated</span>}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1655,6 +1668,7 @@ export default function PassengerDash(){
                 <DetailRow label="Pickup time" val={b.pickup_time} accent="#fbbf24"/>
                 <div style={{display:'flex',justifyContent:'space-between',padding:'12px 0'}}><span style={{color:'#555',fontSize:13}}>Total</span><span style={{color:'#fbbf24',fontWeight:700,fontSize:16}}>{b.seats*(b.pool_price||b.price)} EGP</span></div>
               </div>
+              <button onClick={()=>openInvoice(b.id)} style={{width:'100%',background:'#161616',color:'#fbbf24',border:'1px solid #fbbf2433',borderRadius:12,padding:'14px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginBottom:10}}>🧾 View receipt</button>
               <button style={{...btnDanger,width:'100%'}} onClick={()=>{cancelBooking(b.id);setSelBooking(null);sessionStorage.removeItem('selBookingId');}}>Cancel booking</button>
             </div>
           );
@@ -1672,6 +1686,43 @@ export default function PassengerDash(){
               style={{width:'100%',background:'#111',border:'1px solid #222',borderRadius:12,padding:'14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:14,outline:'none',resize:'none',height:80,boxSizing:'border-box'}}
               placeholder="Leave a comment (optional)"/>
             <button onClick={submitRating} style={{...btnPrimary,marginTop:16}}>Submit rating</button>
+          </div>
+        )}
+
+        {/* ── INVOICE / RECEIPT MODAL ── */}
+        {(invoice||invoiceLoading)&&(
+          <div onClick={()=>{setInvoice(null);setInvoiceLoading(false);}} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:600,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'#0f0f0f',borderTopLeftRadius:24,borderTopRightRadius:24,borderTop:'1px solid #fbbf2433',padding:'20px 20px 32px',maxHeight:'88vh',overflowY:'auto'}}>
+              <div style={{width:40,height:4,borderRadius:2,background:'#333',margin:'0 auto 18px'}}/>
+              {invoiceLoading&&<div style={{textAlign:'center',padding:'40px 0',color:'#666'}}>Loading receipt…</div>}
+              {invoice&&(()=>{
+                const money=v=>`${Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2})} ${invoice.currency||'EGP'}`;
+                const row=(l,v,bold)=>(<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',fontSize:bold?15:13.5}}><span style={{color:bold?'#fff':'#888',fontWeight:bold?700:400}}>{l}</span><span style={{color:bold?'#fbbf24':'#ddd',fontWeight:bold?800:600}}>{v}</span></div>);
+                return(<div>
+                  <div style={{textAlign:'center',marginBottom:18}}>
+                    <div style={{fontSize:34,marginBottom:6}}>🧾</div>
+                    <div style={{fontSize:18,fontWeight:800,color:'#fff'}}>Receipt</div>
+                    <div style={{fontSize:12,color:'#666',marginTop:3}}>{invoice.invoice_no} · {fmtDate(invoice.issued_at)}</div>
+                  </div>
+                  <div style={{background:'#161616',border:'1px solid #222',borderRadius:14,padding:'10px 16px',marginBottom:16}}>
+                    {row('Passenger',invoice.passenger_name)}
+                    <div style={{height:1,background:'#222',margin:'2px 0'}}/>
+                    {row('Route',`${invoice.route?.from||'—'} → ${invoice.route?.to||'—'}`)}
+                    {row('Travel date',fmtDate(invoice.travel_date))}
+                    {row('Pickup time',invoice.pickup_time||'—')}
+                    {row('Status',(invoice.status||'').toUpperCase())}
+                  </div>
+                  <div style={{background:'#161616',border:'1px solid #222',borderRadius:14,padding:'10px 16px',marginBottom:16}}>
+                    {row(`Base fare × ${invoice.seats} seat${invoice.seats>1?'s':''}`,money(invoice.subtotal))}
+                    {invoice.is_surge&&invoice.surge_amount>0&&row('Surge',`+ ${money(invoice.surge_amount)}`)}
+                    <div style={{height:1,background:'#2a2a2a',margin:'4px 0'}}/>
+                    {row('Total',money(invoice.total),true)}
+                  </div>
+                  <div style={{fontSize:11,color:'#444',textAlign:'center',marginBottom:14}}>Fare is collected by the driver. This receipt is for your records.</div>
+                  <button onClick={()=>{setInvoice(null);}} style={{...btnPrimary,width:'100%'}}>Done</button>
+                </div>);
+              })()}
+            </div>
           </div>
         )}
 

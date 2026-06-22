@@ -133,6 +133,51 @@ router.get('/mine', requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
+// GET /api/bookings/:id/invoice — receipt breakdown for one booking (owner or admin)
+router.get('/:id/invoice', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT b.id, b.seats, b.effective_price, b.is_surge, b.status, b.pickup_note,
+             b.travel_date, b.created_at,
+             t.from_loc, t.to_loc, t.pickup_time, t.price AS base_price,
+             u.name AS passenger_name
+      FROM bookings b
+      JOIN trips t ON t.id = b.trip_id
+      JOIN users u ON u.id = b.passenger_id
+      WHERE b.id = ?`, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Booking not found' });
+    const b = rows[0];
+    const [own] = await db.query('SELECT passenger_id FROM bookings WHERE id=?', [req.params.id]);
+    if (own[0].passenger_id !== req.user.id && req.user.role !== 'admin')
+      return res.status(403).json({ error: 'Not your booking' });
+
+    const seats   = Number(b.seats) || 1;
+    const base    = Number(b.base_price) || 0;
+    const perSeat = b.effective_price != null ? Number(b.effective_price) : base;
+    const subtotal = base * seats;
+    const surge    = b.is_surge ? Math.max(0, (perSeat - base) * seats) : 0;
+    const total    = perSeat * seats;
+    res.json({
+      invoice_no: 'WSL-' + String(b.id).padStart(6, '0'),
+      issued_at: b.created_at,
+      passenger_name: b.passenger_name,
+      status: b.status,
+      route: { from: b.from_loc, to: b.to_loc },
+      travel_date: b.travel_date,
+      pickup_time: b.pickup_time,
+      pickup_note: b.pickup_note,
+      seats,
+      base_fare_per_seat: base,
+      effective_per_seat: perSeat,
+      subtotal,
+      surge_amount: surge,
+      is_surge: !!b.is_surge,
+      total,
+      currency: 'EGP',
+    });
+  } catch (err) { console.error('invoice:', err.message); res.status(500).json({ error: 'Server error' }); }
+});
+
 // GET /api/bookings/all-day-bookings — admin
 router.get('/all-day-bookings', requireAuth, requireRole('admin'), async (req, res) => {
   const { date } = req.query;

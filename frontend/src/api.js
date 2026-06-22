@@ -50,6 +50,7 @@ export const getMyBookings   = ()    => get('/bookings/mine');
 export const bookTrip        = (b)   => post('/bookings', b);
 export const cancelBooking   = (id)  => put(`/bookings/${id}/cancel`);
 export const getTripBookings = (tid) => get(`/bookings/trip/${tid}`);
+export const getInvoice      = (id)  => get(`/bookings/${id}/invoice`);
 
 // ── CHECKINS ──────────────────────────────────────────────
 export const updateCheckin   = (bookingId, status) => put(`/checkins/${bookingId}`, { status });
