@@ -5,7 +5,7 @@ import { Plus, Trash2, CheckCircle, XCircle } from "lucide-react";
 export function Holidays() {
   const [items, setItems] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", date: "", surge_multiplier: "1.5" });
+  const [form, setForm] = useState({ name: "", holiday_date: "" });
   const [showForm, setShowForm] = useState(false);
 
   const load = () => { setLoading(true); api.holidays().then(setItems).finally(() => setLoading(false)); };
@@ -13,8 +13,8 @@ export function Holidays() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    await api.createHoliday({ ...form, surge_multiplier: Number(form.surge_multiplier) });
-    setShowForm(false); setForm({ name: "", date: "", surge_multiplier: "1.5" }); load();
+    await api.createHoliday({ name: form.name, holiday_date: form.holiday_date, no_service: true } as any);
+    setShowForm(false); setForm({ name: "", holiday_date: "" }); load();
   }
 
   return (
@@ -28,8 +28,8 @@ export function Holidays() {
           <h3 className="font-semibold">New Holiday</h3>
           <div className="grid grid-cols-3 gap-3">
             <div><label className="text-xs text-muted-foreground mb-1 block">Name</label><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
-            <div><label className="text-xs text-muted-foreground mb-1 block">Date</label><input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
-            <div><label className="text-xs text-muted-foreground mb-1 block">Surge Multiplier</label><input type="number" step="0.1" value={form.surge_multiplier} onChange={(e) => setForm({ ...form, surge_multiplier: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Date</label><input required type="date" value={form.holiday_date} onChange={(e) => setForm({ ...form, holiday_date: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div className="flex items-end"><span className="text-xs text-muted-foreground pb-2">🚫 No service on this day</span></div>
           </div>
           <div className="flex gap-2 justify-end"><button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-secondary text-sm">Cancel</button><button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Create</button></div>
         </form>
@@ -37,12 +37,12 @@ export function Holidays() {
       {loading ? <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div> : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border"><th className="text-left px-5 py-3 text-muted-foreground font-medium">Name</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Date</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Surge</th><th className="px-5 py-3" /></tr></thead>
-            <tbody>{items.length === 0 ? <tr><td colSpan={4} className="px-5 py-10 text-center text-muted-foreground">No holidays</td></tr> : items.map((h) => (
+            <thead><tr className="border-b border-border"><th className="text-left px-5 py-3 text-muted-foreground font-medium">Name</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Date</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Service</th><th className="px-5 py-3" /></tr></thead>
+            <tbody>{items.length === 0 ? <tr><td colSpan={4} className="px-5 py-10 text-center text-muted-foreground">No holidays</td></tr> : items.map((h: any) => (
               <tr key={h.id} className="border-b border-border/50 hover:bg-secondary/30">
-                <td className="px-5 py-3 font-medium">{h.name}</td>
-                <td className="px-5 py-3 text-muted-foreground">{new Date(h.date).toLocaleDateString()}</td>
-                <td className="px-5 py-3 text-foreground">×{h.surge_multiplier}</td>
+                <td className="px-5 py-3 font-medium">{h.name || "—"}</td>
+                <td className="px-5 py-3 text-muted-foreground">{h.holiday_date ? new Date(h.holiday_date).toLocaleDateString() : "—"}</td>
+                <td className="px-5 py-3 text-foreground">{h.no_service ? "🚫 No service" : "Running"}</td>
                 <td className="px-5 py-3 text-right"><button onClick={async () => { if (confirm("Delete?")) { await api.deleteHoliday(h.id); load(); } }} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><Trash2 size={14} /></button></td>
               </tr>
             ))}</tbody>
@@ -57,15 +57,15 @@ export function VehicleTypes() {
   const [items, setItems] = useState<VehicleType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", capacity: "", base_fare: "", per_km_rate: "" });
+  const [form, setForm] = useState({ vehicle_name: "", seats: "", ride_type: "Shuttle", vehicle_type: "Shuttle" });
 
   const load = () => { setLoading(true); api.vehicleTypes().then(setItems).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    await api.createVehicleType({ name: form.name, capacity: Number(form.capacity), base_fare: Number(form.base_fare), per_km_rate: Number(form.per_km_rate) });
-    setShowForm(false); setForm({ name: "", capacity: "", base_fare: "", per_km_rate: "" }); load();
+    await api.createVehicleType({ vehicle_name: form.vehicle_name, seats: Number(form.seats), ride_type: form.ride_type, vehicle_type: form.vehicle_type });
+    setShowForm(false); setForm({ vehicle_name: "", seats: "", ride_type: "Shuttle", vehicle_type: "Shuttle" }); load();
   }
 
   return (
@@ -78,10 +78,10 @@ export function VehicleTypes() {
         <form onSubmit={create} className="bg-card border border-border rounded-xl p-5 space-y-3">
           <h3 className="font-semibold">New Vehicle Type</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-xs text-muted-foreground mb-1 block">Name</label><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
-            <div><label className="text-xs text-muted-foreground mb-1 block">Capacity</label><input required type="number" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
-            <div><label className="text-xs text-muted-foreground mb-1 block">Base Fare (EGP)</label><input type="number" value={form.base_fare} onChange={(e) => setForm({ ...form, base_fare: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
-            <div><label className="text-xs text-muted-foreground mb-1 block">Per KM Rate</label><input type="number" step="0.01" value={form.per_km_rate} onChange={(e) => setForm({ ...form, per_km_rate: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Name</label><input required value={form.vehicle_name} onChange={(e) => setForm({ ...form, vehicle_name: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Seats</label><input required type="number" value={form.seats} onChange={(e) => setForm({ ...form, seats: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Ride Type</label><input value={form.ride_type} onChange={(e) => setForm({ ...form, ride_type: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Vehicle Type</label><input value={form.vehicle_type} onChange={(e) => setForm({ ...form, vehicle_type: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
           </div>
           <div className="flex gap-2 justify-end"><button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-secondary text-sm">Cancel</button><button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Create</button></div>
         </form>
@@ -89,14 +89,14 @@ export function VehicleTypes() {
       {loading ? <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div> : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-border"><th className="text-left px-5 py-3 text-muted-foreground font-medium">Name</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Capacity</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Base Fare</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Per KM</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Status</th></tr></thead>
-            <tbody>{items.length === 0 ? <tr><td colSpan={5} className="px-5 py-10 text-center text-muted-foreground">No vehicle types</td></tr> : items.map((v) => (
+            <thead><tr className="border-b border-border"><th className="text-left px-5 py-3 text-muted-foreground font-medium">Name</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Seats</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Ride Type</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Type</th><th className="text-left px-5 py-3 text-muted-foreground font-medium">Status</th></tr></thead>
+            <tbody>{items.length === 0 ? <tr><td colSpan={5} className="px-5 py-10 text-center text-muted-foreground">No vehicle types</td></tr> : items.map((v: any) => (
               <tr key={v.id} className="border-b border-border/50 hover:bg-secondary/30">
-                <td className="px-5 py-3 font-medium">{v.name}</td>
-                <td className="px-5 py-3 text-muted-foreground">{v.capacity} seats</td>
-                <td className="px-5 py-3">EGP {v.base_fare}</td>
-                <td className="px-5 py-3">EGP {v.per_km_rate}</td>
-                <td className="px-5 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v.is_active ? "bg-green-500/15 text-green-400" : "bg-muted text-muted-foreground"}`}>{v.is_active ? "Active" : "Inactive"}</span></td>
+                <td className="px-5 py-3 font-medium">{v.vehicle_name}</td>
+                <td className="px-5 py-3 text-muted-foreground">{v.seats} seats</td>
+                <td className="px-5 py-3 text-muted-foreground">{v.ride_type}</td>
+                <td className="px-5 py-3 text-muted-foreground">{v.vehicle_type}</td>
+                <td className="px-5 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v.status === "active" ? "bg-green-500/15 text-green-400" : "bg-muted text-muted-foreground"}`}>{v.status === "active" ? "Active" : "Inactive"}</span></td>
               </tr>
             ))}</tbody>
           </table>

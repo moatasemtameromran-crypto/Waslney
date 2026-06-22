@@ -10,7 +10,10 @@ async function ensureTable() {
       id INT AUTO_INCREMENT PRIMARY KEY,
       route_id INT DEFAULT NULL,
       route_name VARCHAR(200) DEFAULT NULL,
+      fare_type VARCHAR(50) NOT NULL DEFAULT 'fare_per_km',
       base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
+      fare_per_stop DECIMAL(10,2) NOT NULL DEFAULT 0,
+      fare_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
       surge_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
       surge_active TINYINT(1) NOT NULL DEFAULT 0,
       city VARCHAR(100) DEFAULT 'Cairo',
@@ -18,6 +21,24 @@ async function ensureTable() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // Self-migrate older tables. MySQL doesn't support "ADD COLUMN IF NOT EXISTS",
+  // so check information_schema first, then ALTER only the missing columns.
+  const wanted: Record<string, string> = {
+    fare_type: "VARCHAR(50) NOT NULL DEFAULT 'fare_per_km'",
+    fare_per_stop: "DECIMAL(10,2) NOT NULL DEFAULT 0",
+    fare_per_km: "DECIMAL(10,2) NOT NULL DEFAULT 0",
+  };
+  try {
+    const [cols] = await db.query(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fare_rules'"
+    ) as any;
+    const have = new Set(cols.map((c: any) => c.COLUMN_NAME));
+    for (const [name, def] of Object.entries(wanted)) {
+      if (!have.has(name)) {
+        await db.query(`ALTER TABLE fare_rules ADD COLUMN ${name} ${def}`).catch(() => {});
+      }
+    }
+  } catch (_) {}
 }
 
 router.get("/", requireAdminAuth, async (req, res) => {
@@ -36,13 +57,13 @@ router.get("/", requireAdminAuth, async (req, res) => {
 });
 
 router.post("/", requireAdminAuth, async (req, res) => {
-  const { route_id, route_name, base_fare, surge_multiplier, surge_active, city, status } = req.body;
+  const { route_id, route_name, fare_type, base_fare, fare_per_stop, fare_per_km, surge_multiplier, surge_active, city, status } = req.body;
   try {
     await ensureTable();
     const [result] = await db.query(
-      `INSERT INTO fare_rules (route_id, route_name, base_fare, surge_multiplier, surge_active, city, status)
-       VALUES (?,?,?,?,?,?,?)`,
-      [route_id || null, route_name || null, base_fare, surge_multiplier || 1.0, surge_active ? 1 : 0, city || 'Cairo', status || 'active']
+      `INSERT INTO fare_rules (route_id, route_name, fare_type, base_fare, fare_per_stop, fare_per_km, surge_multiplier, surge_active, city, status)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [route_id || null, route_name || null, fare_type || 'fare_per_km', base_fare || 0, fare_per_stop || 0, fare_per_km || 0, surge_multiplier || 1.0, surge_active ? 1 : 0, city || 'Cairo', status || 'active']
     ) as any;
     res.status(201).json({ id: result.insertId });
   } catch (err: any) {

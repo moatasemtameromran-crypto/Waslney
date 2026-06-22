@@ -140,7 +140,7 @@ export const api = {
 
   /* Push Notifications */
   pushHistory: () => request<any[]>("/pushes"),
-  sendPush: (data: any) => request("/pushes", { method: "POST", body: JSON.stringify(data) }),
+  sendPush: (data: any) => request("/pushes/send", { method: "POST", body: JSON.stringify(data) }),
 
   /* Settings */
   settings: () => request<any>("/settings"),

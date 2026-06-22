@@ -6,16 +6,16 @@ export default function Promotions() {
   const [promos, setPromos] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ code: "", discount_type: "percentage", discount_value: "", min_fare: "", max_uses: "", valid_from: "", valid_until: "" });
+  const [form, setForm] = useState({ code: "", discount_type: "percentage", discount_value: "", min_fare: "", usage_limit: "", valid_from: "", valid_to: "" });
 
   const load = () => { setLoading(true); api.promotions().then(setPromos).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    await api.createPromotion({ ...form, discount_value: Number(form.discount_value), min_fare: Number(form.min_fare), max_uses: Number(form.max_uses) });
+    await api.createPromotion({ ...form, discount_value: Number(form.discount_value), min_fare: Number(form.min_fare), usage_limit: form.usage_limit ? Number(form.usage_limit) : null } as any);
     setShowForm(false);
-    setForm({ code: "", discount_type: "percentage", discount_value: "", min_fare: "", max_fare: "", max_uses: "", valid_from: "", valid_until: "" } as any);
+    setForm({ code: "", discount_type: "percentage", discount_value: "", min_fare: "", usage_limit: "", valid_from: "", valid_to: "" });
     load();
   }
 
@@ -55,11 +55,11 @@ export default function Promotions() {
             <div><label className="text-xs text-muted-foreground mb-1 block">Min Fare</label>
               <input type="number" value={form.min_fare} onChange={(e) => setForm({ ...form, min_fare: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Max Uses</label>
-              <input type="number" value={form.max_uses} onChange={(e) => setForm({ ...form, max_uses: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+              <input type="number" value={form.usage_limit} onChange={(e) => setForm({ ...form, usage_limit: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Valid From</label>
               <input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
             <div><label className="text-xs text-muted-foreground mb-1 block">Valid Until</label>
-              <input type="date" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
+              <input type="date" value={form.valid_to} onChange={(e) => setForm({ ...form, valid_to: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" /></div>
           </div>
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-secondary text-sm hover:bg-muted transition-colors">Cancel</button>
@@ -86,13 +86,13 @@ export default function Promotions() {
                     {p.discount_value}{p.discount_type === "percentage" ? "%" : " EGP"} off
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {p.used_count || 0}/{p.max_uses || "∞"} used · {p.valid_until ? `Expires ${new Date(p.valid_until).toLocaleDateString()}` : "No expiry"}
+                    {p.used_count || 0}/{(p as any).usage_limit || "∞"} used · {(p as any).valid_to ? `Expires ${new Date((p as any).valid_to).toLocaleDateString()}` : "No expiry"}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.is_active ? "bg-green-500/15 text-green-400" : "bg-muted text-muted-foreground"}`}>
-                  {p.is_active ? "Active" : "Inactive"}
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${(p as any).status === "active" ? "bg-green-500/15 text-green-400" : "bg-muted text-muted-foreground"}`}>
+                  {(p as any).status === "active" ? "Active" : "Inactive"}
                 </span>
                 <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                   <Trash2 size={14} />
