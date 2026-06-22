@@ -4,6 +4,7 @@ import * as api from '../../api.js';
 import { C, WaslneyLogo, Badge, DetailRow, CapBar, Stars, btnPrimary, btnSm, btnDanger, card, fmtDate, Spinner, SkeletonList, sectSt, Avatar } from '../../components/UI.jsx';
 import TripMap, { ProximityMap } from '../../components/TripMap.jsx';
 import socket, { connectSocket, watchTrip, joinPoolChat, sendPoolChatMessage } from '../../socket.js';
+import { lockEnabled, setupPin, disableLock } from '../../applock.js';
 
 const SEARCH_RADIUS_M = 10000;
 
@@ -881,6 +882,24 @@ export default function PassengerDash(){
     const msg=`Join me on Waslney and we both get ${referral.reward_per_referral} EGP off! Use my code ${code} when you sign up.`;
     if(navigator.share){navigator.share({title:'Waslney',text:msg}).catch(()=>{});}
     else{navigator.clipboard?.writeText(msg).then(()=>notify('Copied','Invite text copied to clipboard.','success')).catch(()=>{});}
+  }
+
+  // App lock (PIN)
+  const [lockOn,setLockOn]=useState(lockEnabled());
+  const [lockModal,setLockModal]=useState(false); // false | 'set' | 'off'
+  const [pin1,setPin1]=useState('');
+  const [pin2,setPin2]=useState('');
+  async function enableLock(){
+    if(!/^\d{4}$/.test(pin1)){notify('Invalid PIN','Use exactly 4 digits.','error');return;}
+    if(pin1!==pin2){notify('PINs differ','Re-enter the same PIN.','error');return;}
+    await setupPin(pin1);setLockOn(true);setLockModal(false);setPin1('');setPin2('');
+    notify('App lock on','You\u2019ll need your PIN to open the app.','success');
+  }
+  async function turnOffLock(){
+    const ok=await disableLock(pin1);
+    if(!ok){notify('Wrong PIN','That PIN is incorrect.','error');return;}
+    setLockOn(false);setLockModal(false);setPin1('');setPin2('');
+    notify('App lock off','PIN removed.','success');
   }
 
   async function loadPendingDrivers(){
@@ -1940,6 +1959,16 @@ export default function PassengerDash(){
                 <span>🏷️ Promotions &amp; discounts</span><span style={{color:'#555'}}>›</span></button>
             </div>
             <div style={{...card,marginBottom:14}}>
+              <p style={sectSt}>Security</p>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 0'}}>
+                <div>
+                  <div style={{fontSize:14,color:'#fff'}}>🔒 App lock (PIN)</div>
+                  <div style={{fontSize:12,color:'#666',marginTop:2}}>{lockOn?'Enabled — PIN required to open':'Require a PIN to open the app'}</div>
+                </div>
+                <button onClick={()=>{setPin1('');setPin2('');setLockModal(lockOn?'off':'set');}} style={{background:lockOn?'transparent':'#fbbf24',color:lockOn?'#f87171':'#000',border:lockOn?'1px solid #f8717144':'none',borderRadius:10,padding:'9px 16px',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>{lockOn?'Turn off':'Enable'}</button>
+              </div>
+            </div>
+            <div style={{...card,marginBottom:14}}>
               <p style={sectSt}>Help</p>
               <button onClick={openHelp} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',borderBottom:'1px solid #1a1a1a',padding:'14px 0',color:'#fff',fontSize:14,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
                 <span>🆘 Help & Support</span><span style={{color:'#555'}}>›</span></button>
@@ -2073,6 +2102,27 @@ export default function PassengerDash(){
               ))}
               <button onClick={()=>{setReferView(null);openRefer();}} style={{width:'100%',...btnPrimary,marginTop:8}}>🎁 Get more — Refer &amp; Earn</button>
               <button onClick={()=>setReferView(null)} style={{width:'100%',background:'#161616',color:'#aaa',border:'1px solid #222',borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginTop:10}}>Close</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── APP LOCK MODAL ── */}
+        {lockModal&&(
+          <div onClick={()=>setLockModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:600,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'#0f0f0f',borderTopLeftRadius:24,borderTopRightRadius:24,borderTop:'1px solid #fbbf2433',padding:'20px 20px 32px'}}>
+              <div style={{width:40,height:4,borderRadius:2,background:'#333',margin:'0 auto 18px'}}/>
+              <div style={{textAlign:'center',marginBottom:16}}>
+                <div style={{fontSize:34,marginBottom:6}}>🔒</div>
+                <h2 style={{fontSize:19,fontWeight:800,color:'#fff'}}>{lockModal==='set'?'Set a 4-digit PIN':'Enter PIN to turn off'}</h2>
+              </div>
+              <input value={pin1} onChange={e=>setPin1(e.target.value.replace(/\D/g,'').slice(0,4))} inputMode="numeric" type="password" placeholder="••••"
+                style={{width:'100%',boxSizing:'border-box',background:'#161616',border:'1px solid #222',borderRadius:12,padding:'14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:22,letterSpacing:'.5em',textAlign:'center',outline:'none',marginBottom:10}}/>
+              {lockModal==='set'&&(
+                <input value={pin2} onChange={e=>setPin2(e.target.value.replace(/\D/g,'').slice(0,4))} inputMode="numeric" type="password" placeholder="Confirm PIN"
+                  style={{width:'100%',boxSizing:'border-box',background:'#161616',border:'1px solid #222',borderRadius:12,padding:'14px',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:18,letterSpacing:'.4em',textAlign:'center',outline:'none',marginBottom:10}}/>
+              )}
+              <button onClick={lockModal==='set'?enableLock:turnOffLock} style={{...btnPrimary,width:'100%',marginTop:4}}>{lockModal==='set'?'Enable app lock':'Turn off'}</button>
+              <button onClick={()=>setLockModal(false)} style={{width:'100%',background:'#161616',color:'#aaa',border:'1px solid #222',borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif",marginTop:10}}>Cancel</button>
             </div>
           </div>
         )}

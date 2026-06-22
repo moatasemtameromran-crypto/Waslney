@@ -8,6 +8,7 @@ import DriverDash    from './pages/driver/DriverDash.jsx';
 import AdminDash     from './pages/admin/AdminDash.jsx';
 import CompanyDash   from './pages/company/CompanyDash.jsx';
 import Toast         from './components/Toast.jsx';
+import AppLock       from './components/AppLock.jsx';
 
 export const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -87,10 +88,14 @@ export default function App() {
   return (
     <AuthContext.Provider value={{ user, login, logout, notify }}>
       <div style={{ minHeight:'100vh', background:'#000', color:'#fff', fontFamily:"'Sora',sans-serif" }}>
-        {!user                       && <Landing onEnterCompanyPortal={enterCompanyPortal} />}
-        {user?.role === 'passenger'  && <PassengerDash />}
-        {user?.role === 'driver'     && <DriverDash />}
-        {user?.role === 'admin'      && <AdminDash />}
+        {!user && <Landing onEnterCompanyPortal={enterCompanyPortal} />}
+        {user && (
+          <AppLock>
+            {user.role === 'passenger'  && <PassengerDash />}
+            {user.role === 'driver'     && <DriverDash />}
+            {user.role === 'admin'      && <AdminDash />}
+          </AppLock>
+        )}
         <Toast msg={toast} />
       </div>
     </AuthContext.Provider>
