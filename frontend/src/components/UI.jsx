@@ -186,6 +186,31 @@ export function Spinner() {
   );
 }
 
+export function Skeleton({ width='100%', height=14, radius=8, style }) {
+  return (
+    <div style={{ width, height, borderRadius:radius, background:'linear-gradient(90deg,#161616 25%,#222 37%,#161616 63%)', backgroundSize:'400% 100%', animation:'wslShimmer 1.3s ease infinite', ...style }}>
+      <style>{`@keyframes wslShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}`}</style>
+    </div>
+  );
+}
+
+export function SkeletonCard() {
+  return (
+    <div style={{ background:'#111', borderRadius:16, padding:'16px 20px', marginBottom:10, border:'1px solid #1a1a1a' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
+        <Skeleton width={70} height={18} radius={20} />
+        <Skeleton width={60} height={12} />
+      </div>
+      <Skeleton width="75%" height={15} style={{ marginBottom:10 }} />
+      <Skeleton width="45%" height={12} />
+    </div>
+  );
+}
+
+export function SkeletonList({ count=3 }) {
+  return <div>{Array.from({ length:count }).map((_, i) => <SkeletonCard key={i} />)}</div>;
+}
+
 export function Avatar({ name='', size=40, color, dim, border: brd }) {
   const bg = dim || 'rgba(251,191,36,0.15)';
   const col = color || C.amber;

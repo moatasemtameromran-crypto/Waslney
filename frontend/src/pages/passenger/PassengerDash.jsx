@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../App.jsx';
 import * as api from '../../api.js';
-import { C, WaslneyLogo, Badge, DetailRow, CapBar, Stars, btnPrimary, btnSm, btnDanger, card, fmtDate, Spinner, sectSt, Avatar } from '../../components/UI.jsx';
+import { C, WaslneyLogo, Badge, DetailRow, CapBar, Stars, btnPrimary, btnSm, btnDanger, card, fmtDate, Spinner, SkeletonList, sectSt, Avatar } from '../../components/UI.jsx';
 import TripMap, { ProximityMap } from '../../components/TripMap.jsx';
 import socket, { connectSocket, watchTrip, joinPoolChat, sendPoolChatMessage } from '../../socket.js';
 
@@ -1283,6 +1283,13 @@ export default function PassengerDash(){
               <NoTripsPoolCard destName={toCoord?.name} onClick={openSmartPool}/>
             )}
 
+            {searching&&(
+              <div style={{marginTop:4}}>
+                <p style={{fontSize:13,color:'#555',marginBottom:16}}>Searching nearby trips…</p>
+                <SkeletonList count={3}/>
+              </div>
+            )}
+
             {matchedTrips.length>0&&(
               <div>
                 <p style={{fontSize:13,color:'#555',marginBottom:16}}>{matchedTrips.length} trip{matchedTrips.length!==1?'s':''} found</p>
@@ -1641,7 +1648,7 @@ export default function PassengerDash(){
                 <button onClick={()=>changeTab('home')} style={{...btnPrimary,marginTop:16,maxWidth:200,margin:'16px auto 0'}}>Book a ride →</button>
               </div>
             )}
-            {loadingB&&<Spinner/>}
+            {loadingB&&<SkeletonList count={3}/>}
           </div>
         )}
 
