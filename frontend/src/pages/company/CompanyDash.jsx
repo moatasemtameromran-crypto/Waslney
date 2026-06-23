@@ -25,7 +25,7 @@ const fontSans = "'Sora', 'DM Sans', sans-serif";
 
 // ── Helpers ───────────────────────────────────────────────
 function fmtEGP(n) { return `${Number(n).toLocaleString('ar-EG')} EGP`; }
-function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—'; }
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('ar-EG', { day:'2-digit', month:'short', year:'numeric' }) : '—'; }
 function fmtTime(t) { return t ? t.slice(0,5) : '—'; }
 
 function useCountdown(endsAt) {
@@ -67,11 +67,13 @@ export default function CompanyDash({ onExitPortal }) {
   if (!token || !company) return <AuthScreen onLogin={onLogin} />;
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: fontSans, color: C.text }}>
+    <div dir="rtl" style={{ minHeight: '100vh', background: C.bg, fontFamily: fontSans, color: C.text }}>
       {/* Google fonts */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Sora:wght@300;400;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Sora:wght@300;400;600;700;800&family=Tajawal:wght@400;500;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        [dir="rtl"] { font-family: 'Tajawal','Sora',sans-serif; }
+        [dir="rtl"] * { letter-spacing: normal !important; }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 4px; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
         @keyframes blink { 0%,100%{opacity:1} 49%{opacity:1} 50%,99%{opacity:0} }
@@ -88,7 +90,7 @@ export default function CompanyDash({ onExitPortal }) {
         <div style={{ display:'flex', alignItems:'center', gap:10, marginRight:'auto' }}>
           <span style={{ fontSize:22 }}>🚌</span>
           <span style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: C.gold, letterSpacing: '.05em' }}>
-            TENDER_PORTAL
+            بوابة المناقصات
           </span>
           <span style={{ fontSize: 11, color: C.text3, fontFamily: font }}>// {company.company_name}</span>
         </div>
@@ -101,14 +103,14 @@ export default function CompanyDash({ onExitPortal }) {
             fontFamily: font, fontSize: 12, fontWeight: 600,
             textTransform: 'uppercase', letterSpacing: '.08em', transition: 'all .15s',
           }}>
-            {{ bids:'⚡ Live Bids', fleet:'🚐 My Fleet', won:'🏆 Won', profile:'⚙ Profile' }[t]}
+            {{ bids:'⚡ المزايدات', fleet:'🚐 أسطولي', won:'🏆 الفائزة', profile:'⚙ الملف' }[t]}
           </button>
         ))}
         <button onClick={onLogout} style={{
           marginLeft: 16, background: 'transparent', color: C.text3,
           border: `1px solid ${C.border}`, borderRadius: 6,
           padding: '6px 14px', cursor: 'pointer', fontFamily: font, fontSize: 11,
-        }}>logout</button>
+        }}>خروج</button>
       </nav>
 
       {/* Content */}
@@ -138,7 +140,7 @@ function AuthScreen({ onLogin }) {
       if (mode === 'login') {
         res = await api.companyLogin({ company_name: form.company_name, password: form.password });
       } else {
-        if (!form.fleet_number) { setErr('Fleet number required'); setBusy(false); return; }
+        if (!form.fleet_number) { setErr('رقم الأسطول مطلوب'); setBusy(false); return; }
         res = await api.companyRegister(form);
       }
       onLogin(res.token, res.company);
@@ -147,11 +149,11 @@ function AuthScreen({ onLogin }) {
   }
 
   return (
-    <div style={{
+    <div dir="rtl" style={{
       minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center',
       justifyContent: 'center', fontFamily: fontSans,
     }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Sora:wght@400;600;700&display=swap');*{box-sizing:border-box}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Sora:wght@400;600;700&family=Tajawal:wght@400;500;700&display=swap');*{box-sizing:border-box}[dir="rtl"]{font-family:'Tajawal','Sora',sans-serif}[dir="rtl"] *{letter-spacing:normal !important}`}</style>
 
       {/* Background grid */}
       <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${C.border} 1px,transparent 1px),linear-gradient(90deg,${C.border} 1px,transparent 1px)`, backgroundSize:'40px 40px', opacity:.4, pointerEvents:'none' }} />
@@ -160,8 +162,8 @@ function AuthScreen({ onLogin }) {
         {/* Header */}
         <div style={{ textAlign:'center', marginBottom:32 }}>
           <div style={{ fontSize:48, marginBottom:8 }}>🚌</div>
-          <div style={{ fontFamily: font, fontSize: 22, fontWeight: 600, color: C.gold, letterSpacing: '.1em' }}>TENDER_PORTAL</div>
-          <div style={{ fontSize: 13, color: C.text2, marginTop:6 }}>Bus company bidding platform</div>
+          <div style={{ fontFamily: font, fontSize: 22, fontWeight: 600, color: C.gold, letterSpacing: '.1em' }}>بوابة المناقصات</div>
+          <div style={{ fontSize: 13, color: C.text2, marginTop:6 }}>منصة مزايدات شركات الأتوبيس</div>
         </div>
 
         <div style={{ background: C.bg2, border:`1px solid ${C.border}`, borderRadius:16, overflow:'hidden' }}>
@@ -174,20 +176,20 @@ function AuthScreen({ onLogin }) {
                 fontFamily: font, fontSize:12, fontWeight:600, textTransform:'uppercase', letterSpacing:'.1em',
                 borderBottom: mode===m ? `2px solid ${C.gold}` : '2px solid transparent',
               }}>
-                {m === 'login' ? '→ Login' : '+ Register'}
+                {m === 'login' ? 'دخول' : 'تسجيل'}
               </button>
             ))}
           </div>
 
           <div style={{ padding:'28px 24px', display:'flex', flexDirection:'column', gap:14 }}>
-            <FieldInput label="Company Name" value={form.company_name} onChange={v => setForm({...form, company_name:v})} placeholder="e.g. Cairo Express Co." autoComplete="off" name="waslney_company" />
+            <FieldInput label="اسم الشركة" value={form.company_name} onChange={v => setForm({...form, company_name:v})} placeholder="مثال: شركة القاهرة السريعة" autoComplete="off" name="waslney_company" />
             {mode === 'register' && (
               <>
-                <FieldInput label="Fleet / Bus Number" value={form.fleet_number} onChange={v => setForm({...form, fleet_number:v})} placeholder="e.g. BUS-2024-CAIRO" autoComplete="off" name="waslney_fleet" />
-                <FieldInput label="Contact Phone" value={form.phone} onChange={v => setForm({...form, phone:v})} placeholder="e.g. +20 100 000 0000" autoComplete="off" name="waslney_phone" />
+                <FieldInput label="رقم الأسطول / الأتوبيس" value={form.fleet_number} onChange={v => setForm({...form, fleet_number:v})} placeholder="مثال: BUS-2024-CAIRO" autoComplete="off" name="waslney_fleet" />
+                <FieldInput label="رقم الهاتف" value={form.phone} onChange={v => setForm({...form, phone:v})} placeholder="مثال: +20 100 000 0000" autoComplete="off" name="waslney_phone" />
               </>
             )}
-            <FieldInput label="Password" type="password" value={form.password} onChange={v => setForm({...form, password:v})} placeholder="••••••••" onEnter={submit} autoComplete="new-password" name="waslney_pw" />
+            <FieldInput label="كلمة المرور" type="password" value={form.password} onChange={v => setForm({...form, password:v})} placeholder="••••••••" onEnter={submit} autoComplete="new-password" name="waslney_pw" />
 
             {err && <div style={{ fontSize:12, color:C.red, background:C.redDim, border:`1px solid ${C.redBorder}`, borderRadius:6, padding:'8px 12px' }}>⚠ {err}</div>}
 
@@ -196,7 +198,7 @@ function AuthScreen({ onLogin }) {
               border:'none', borderRadius:10, padding:'14px', cursor: busy?'default':'pointer',
               fontFamily: font, fontSize:13, fontWeight:600, letterSpacing:'.05em', marginTop:4,
             }}>
-              {busy ? 'Please wait…' : mode === 'login' ? '→ LOGIN' : '+ CREATE ACCOUNT'}
+              {busy ? 'برجاء الانتظار…' : mode === 'login' ? 'دخول' : 'إنشاء حساب'}
             </button>
           </div>
         </div>
@@ -247,15 +249,15 @@ function BidsTab({ token, company }) {
 
   const openTenders = tenders.filter(t => t.status === 'open');
 
-  if (loading) return <LoadingState label="Loading live tenders…" />;
+  if (loading) return <LoadingState label="جاري تحميل المناقصات المباشرة…" />;
 
   return (
     <div style={{ display:'grid', gridTemplateColumns: selected ? '320px 1fr' : '1fr', gap: 20 }}>
       {/* Tender list */}
       <div>
-        <SectionHeader icon="⚡" label="Open Tenders" count={openTenders.length} />
+        <SectionHeader icon="⚡" label="المناقصات المفتوحة" count={openTenders.length} />
         {openTenders.length === 0 && (
-          <EmptyState icon="🏁" label="No open tenders right now" sub="Check back soon — admin will publish new trips for bidding." />
+          <EmptyState icon="🏁" label="لا توجد مناقصات مفتوحة حالياً" sub="تابعنا قريباً — سينشر المشرف رحلات جديدة للمزايدة." />
         )}
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           {openTenders.map(t => (
@@ -291,7 +293,7 @@ function TenderCard({ tender, active, onClick }) {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
         <div>
           <div style={{ fontFamily: font, fontSize:11, color: C.gold, marginBottom:4, letterSpacing:'.08em' }}>
-            TENDER #{tender.id}
+            مناقصة #{tender.id}
           </div>
           <div style={{ fontSize:14, fontWeight:600 }}>{tender.from_loc} → {tender.to_loc}</div>
           <div style={{ fontSize:12, color: C.text2, marginTop:3 }}>{fmtDate(tender.date)} · {fmtTime(tender.pickup_time)}</div>
@@ -302,15 +304,15 @@ function TenderCard({ tender, active, onClick }) {
             color: over ? C.text3 : urgent ? C.red : C.green,
             animation: urgent && !over ? 'pulse 1s infinite' : 'none',
           }}>
-            {over ? 'ENDED' : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
+            {over ? 'انتهت' : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
           </div>
-          <div style={{ fontSize:10, color: C.text3, fontFamily: font }}>remaining</div>
+          <div style={{ fontSize:10, color: C.text3, fontFamily: font }}>متبقّي</div>
         </div>
       </div>
       <div style={{ display:'flex', gap:12 }}>
-        <Stat label="Bids" value={tender.bid_count || 0} />
-        <Stat label="Lowest" value={tender.lowest_bid ? fmtEGP(tender.lowest_bid) : '—'} accent />
-        <Stat label="Seats" value={tender.total_seats || '—'} />
+        <Stat label="مزايدات" value={tender.bid_count || 0} />
+        <Stat label="الأقل" value={tender.lowest_bid ? fmtEGP(tender.lowest_bid) : '—'} accent />
+        <Stat label="مقاعد" value={tender.total_seats || '—'} />
       </div>
     </div>
   );
@@ -345,11 +347,11 @@ function BiddingArena({ tender, token, company, onBack, onBidPlaced }) {
   async function placeBid() {
     setErr(''); setSuccess('');
     const val = parseFloat(amount);
-    if (!val || val <= 0) { setErr('Enter a valid amount'); return; }
+    if (!val || val <= 0) { setErr('أدخل مبلغاً صحيحاً'); return; }
     setPlacing(true);
     try {
       const res = await api.placeBid(tender.id, val, token);
-      setSuccess(`Bid of ${fmtEGP(val)} placed!`);
+      setSuccess(`تم تقديم مزايدة بقيمة ${fmtEGP(val)}!`);
       setAmount('');
       setDetail(prev => ({ ...prev, bids: res.bids }));
     } catch(e) { setErr(e.message); }
@@ -366,16 +368,16 @@ function BiddingArena({ tender, token, company, onBack, onBidPlaced }) {
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.text2, cursor:'pointer', fontSize:18, lineHeight:1 }}>←</button>
           <div style={{ flex:1 }}>
-            <div style={{ fontFamily:font, fontSize:11, color:C.gold, letterSpacing:'.08em' }}>BIDDING ARENA · TENDER #{tender.id}</div>
+            <div style={{ fontFamily:font, fontSize:11, color:C.gold, letterSpacing:'.08em' }}>ساحة المزايدة · مناقصة #{tender.id}</div>
             <div style={{ fontSize:16, fontWeight:700, marginTop:2 }}>{detail.from_loc} → {detail.to_loc}</div>
-            <div style={{ fontSize:12, color:C.text2 }}>{fmtDate(detail.date)} · Departure {fmtTime(detail.pickup_time)} · {detail.total_seats} seats</div>
+            <div style={{ fontSize:12, color:C.text2 }}>{fmtDate(detail.date)} · الانطلاق {fmtTime(detail.pickup_time)} · {detail.total_seats} مقعد</div>
           </div>
           {/* Countdown */}
           <div style={{ textAlign:'center', background: over?C.bg4:urgent?C.redDim:C.greenDim, border:`1px solid ${over?C.border:urgent?C.redBorder:C.greenBorder}`, borderRadius:10, padding:'10px 16px' }}>
             <div style={{ fontFamily:font, fontSize:26, fontWeight:700, color: over?C.text3:urgent?C.red:C.green, animation: urgent&&!over?'pulse 1s infinite':'none', letterSpacing:'.05em' }}>
-              {over ? 'CLOSED' : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
+              {over ? 'مغلقة' : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
             </div>
-            <div style={{ fontSize:9, color:C.text3, fontFamily:font, letterSpacing:'.1em' }}>TIME REMAINING</div>
+            <div style={{ fontSize:9, color:C.text3, fontFamily:font, letterSpacing:'.1em' }}>الوقت المتبقي</div>
           </div>
         </div>
       </div>
@@ -388,22 +390,22 @@ function BiddingArena({ tender, token, company, onBack, onBidPlaced }) {
           ) : over ? (
             <div style={{ background:C.bg3, border:`1px solid ${C.border}`, borderRadius:10, padding:'20px', textAlign:'center' }}>
               <div style={{ fontSize:28, marginBottom:8 }}>🏁</div>
-              <div style={{ fontFamily:font, fontSize:13, color:C.text2 }}>BIDDING CLOSED</div>
-              <div style={{ fontSize:12, color:C.text3, marginTop:4 }}>Waiting for admin to award</div>
+              <div style={{ fontFamily:font, fontSize:13, color:C.text2 }}>أُغلقت المزايدة</div>
+              <div style={{ fontSize:12, color:C.text3, marginTop:4 }}>بانتظار ترسية المناقصة من المشرف</div>
             </div>
           ) : (
             <div style={{ background:C.bg3, border:`1px solid ${C.border}`, borderRadius:12, padding:'20px' }}>
-              <div style={{ fontFamily:font, fontSize:11, color:C.text2, marginBottom:14, letterSpacing:'.08em' }}>// PLACE YOUR BID</div>
+              <div style={{ fontFamily:font, fontSize:11, color:C.text2, marginBottom:14, letterSpacing:'.08em' }}>// قدّم عرضك</div>
 
               {lowest && (
                 <div style={{ background:C.goldDim, border:`1px solid ${C.goldBorder}`, borderRadius:8, padding:'10px 14px', marginBottom:14, display:'flex', justifyContent:'space-between' }}>
-                  <span style={{ fontSize:12, color:C.text2 }}>Current lowest</span>
+                  <span style={{ fontSize:12, color:C.text2 }}>أقل عرض حالياً</span>
                   <span style={{ fontFamily:font, fontSize:14, fontWeight:700, color:C.gold }}>{fmtEGP(lowest)}</span>
                 </div>
               )}
 
               <div style={{ position:'relative', marginBottom:12 }}>
-                <span style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', fontSize:13, color:C.text2, fontFamily:font }}>EGP</span>
+                <span style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', fontSize:13, color:C.text2, fontFamily:font }}>ج.م</span>
                 <input
                   type="number" value={amount}
                   onChange={e => { setAmount(e.target.value); setErr(''); setSuccess(''); }}
@@ -426,25 +428,25 @@ function BiddingArena({ tender, token, company, onBack, onBidPlaced }) {
                 fontFamily:font, fontSize:13, fontWeight:700, cursor:'pointer',
                 letterSpacing:'.05em', opacity: placing?0.6:1,
               }}>
-                {placing ? 'PLACING BID…' : '⚡ SUBMIT BID'}
+                {placing ? 'جاري تقديم العرض…' : '⚡ تأكيد العرض'}
               </button>
 
               <div style={{ fontSize:10, color:C.text3, marginTop:10, lineHeight:1.6 }}>
-                All companies are anonymous to each other.<br/>
-                You can update your bid at any time before timer ends.<br/>
-                Lowest bid when time ends wins the tender.
+                كل الشركات تكون مجهولة لبعضها البعض.<br/>
+                يمكنك تعديل عرضك في أي وقت قبل انتهاء المؤقت.<br/>
+                أقل عرض عند انتهاء الوقت يفوز بالمناقصة.
               </div>
             </div>
           )}
 
           {/* Trip details */}
           <div style={{ background:C.bg3, border:`1px solid ${C.border}`, borderRadius:10, padding:'14px', marginTop:14 }}>
-            <div style={{ fontFamily:font, fontSize:10, color:C.text3, letterSpacing:'.1em', marginBottom:10 }}>TRIP DETAILS</div>
-            <InfoRow label="Pickup"   value={detail.from_loc} />
-            <InfoRow label="Drop-off" value={detail.to_loc} />
-            <InfoRow label="Date"     value={fmtDate(detail.date)} />
-            <InfoRow label="Time"     value={fmtTime(detail.pickup_time)} />
-            <InfoRow label="Seats"    value={detail.total_seats} />
+            <div style={{ fontFamily:font, fontSize:10, color:C.text3, letterSpacing:'.1em', marginBottom:10 }}>تفاصيل الرحلة</div>
+            <InfoRow label="الانطلاق" value={detail.from_loc} />
+            <InfoRow label="الوصول" value={detail.to_loc} />
+            <InfoRow label="التاريخ" value={fmtDate(detail.date)} />
+            <InfoRow label="الوقت" value={fmtTime(detail.pickup_time)} />
+            <InfoRow label="المقاعد" value={detail.total_seats} />
           </div>
         </div>
 
@@ -452,12 +454,12 @@ function BiddingArena({ tender, token, company, onBack, onBidPlaced }) {
         <div>
           <div style={{ fontFamily:font, fontSize:11, color:C.text2, marginBottom:12, letterSpacing:'.08em', display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ width:8, height:8, borderRadius:'50%', background:C.green, display:'inline-block', animation:'pulse 1.5s infinite' }} />
-            LIVE BID BOARD · {bids.length} bid{bids.length!==1?'s':''}
+            لوحة العروض المباشرة · {bids.length} عرض
           </div>
 
           {bids.length === 0 && (
             <div style={{ textAlign:'center', padding:'32px 16px', color:C.text3, fontFamily:font, fontSize:12 }}>
-              No bids yet<br/>Be the first to bid
+              لا توجد عروض بعد<br/>كن أول من يقدّم عرضاً
             </div>
           )}
 
@@ -473,7 +475,7 @@ function BiddingArena({ tender, token, company, onBack, onBidPlaced }) {
       {(detail.stops && detail.stops.length > 0) && (
         <div style={{ borderTop:`1px solid ${C.border}`, padding:'20px' }}>
           <div style={{ fontFamily:font, fontSize:11, color:C.text2, marginBottom:14, letterSpacing:'.08em' }}>
-            🗺 ROUTE MAP · {detail.stops.length} stop{detail.stops.length!==1?'s':''}
+            🗺 خريطة المسار · {detail.stops.length} نقطة
           </div>
           <TenderRouteMap stops={detail.stops} fromLoc={detail.from_loc} toLoc={detail.to_loc} />
           <StopReport stops={detail.stops} />
@@ -504,12 +506,12 @@ function BidRow({ bid, rank, total }) {
         {rank === 1 ? '★' : rank}
       </div>
       <div style={{ flex:1 }}>
-        <div style={{ fontSize:11, color:C.text3, fontFamily:font }}>Anonymous Company {String.fromCharCode(64 + rank)}</div>
+        <div style={{ fontSize:11, color:C.text3, fontFamily:font }}>شركة مجهولة {String.fromCharCode(64 + rank)}</div>
       </div>
       <div style={{ fontFamily:font, fontSize:16, fontWeight:700, color: isLowest ? C.gold : isHighest ? C.red : C.text }}>
         {fmtEGP(bid.amount)}
       </div>
-      {isLowest && <span style={{ fontSize:10, color:C.gold, fontFamily:font }}>LOWEST</span>}
+      {isLowest && <span style={{ fontSize:10, color:C.gold, fontFamily:font }}>الأقل</span>}
     </div>
   );
 }
@@ -524,21 +526,21 @@ function AwardedBanner({ winner, company }) {
     }}>
       <div style={{ fontSize: 36, marginBottom: 8 }}>{didWin ? '🏆' : '🏁'}</div>
       <div style={{ fontFamily: font, fontSize: 13, color: didWin ? C.gold : C.text2, fontWeight: 700 }}>
-        {didWin ? 'YOU WON THIS TENDER!' : 'TENDER AWARDED'}
+        {didWin ? 'مبروك! لقد فزت بهذه المناقصة' : 'تمت ترسية المناقصة'}
       </div>
       {winner && (
         <div style={{ fontSize: 12, color: C.text2, marginTop: 6 }}>
-          Winning bid: {fmtEGP(winner.amount)}
+          العرض الفائز: {fmtEGP(winner.amount)}
         </div>
       )}
       {didWin && (
         <div style={{ marginTop: 12, fontSize: 12, color: C.green, background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: '10px 14px' }}>
-          ✓ Go to the <strong>🏆 Won</strong> tab to assign a driver &amp; vehicle.
+          ✓ انتقل إلى تبويب <strong>🏆 الفائزة</strong> لتعيين سائق ومركبة.
         </div>
       )}
       {!didWin && winner && (
         <div style={{ fontSize: 11, color: C.text3, marginTop: 6, fontFamily: font }}>
-          Another company won this bid.
+          فازت شركة أخرى بهذا العرض.
         </div>
       )}
     </div>
@@ -563,7 +565,7 @@ function FleetTab({ token }) {
   }, [token]);
 
   async function addDriver() {
-    if (!dForm.name) { setDErr('Driver name required'); return; }
+    if (!dForm.name) { setDErr('اسم السائق مطلوب'); return; }
     setBusy(true);
     try {
       const d = await api.addCompanyDriver(dForm, token);
@@ -579,7 +581,7 @@ function FleetTab({ token }) {
   }
 
   async function addCar() {
-    if (!cForm.plate) { setCErr('Plate required'); return; }
+    if (!cForm.plate) { setCErr('رقم اللوحة مطلوب'); return; }
     setBusy(true);
     try {
       const c = await api.addCompanyCar(cForm, token);
@@ -598,57 +600,57 @@ function FleetTab({ token }) {
     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24 }}>
       {/* Drivers */}
       <div>
-        <SectionHeader icon="👤" label="Drivers" count={drivers.length} />
+        <SectionHeader icon="👤" label="السائقون" count={drivers.length} />
         <div style={{ background:C.bg2, border:`1px solid ${C.border}`, borderRadius:14, overflow:'hidden' }}>
           <div style={{ padding:'16px', borderBottom:`1px solid ${C.border}` }}>
-            <div style={{ fontFamily:font, fontSize:10, color:C.text3, letterSpacing:'.1em', marginBottom:10 }}>ADD DRIVER</div>
+            <div style={{ fontFamily:font, fontSize:10, color:C.text3, letterSpacing:'.1em', marginBottom:10 }}>إضافة سائق</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              <MiniInput placeholder="Full name *" value={dForm.name} onChange={v => setDForm({...dForm,name:v})} />
-              <MiniInput placeholder="Phone" value={dForm.phone} onChange={v => setDForm({...dForm,phone:v})} />
-              <MiniInput placeholder="License number" value={dForm.license_number} onChange={v => setDForm({...dForm,license_number:v})} />
+              <MiniInput placeholder="الاسم الكامل *" value={dForm.name} onChange={v => setDForm({...dForm,name:v})} />
+              <MiniInput placeholder="رقم الهاتف" value={dForm.phone} onChange={v => setDForm({...dForm,phone:v})} />
+              <MiniInput placeholder="رقم الرخصة" value={dForm.license_number} onChange={v => setDForm({...dForm,license_number:v})} />
             </div>
             {dErr && <div style={{ fontSize:11, color:C.red, marginTop:6 }}>⚠ {dErr}</div>}
-            <button onClick={addDriver} disabled={busy} style={addBtnStyle}>+ Add Driver</button>
+            <button onClick={addDriver} disabled={busy} style={addBtnStyle}>+ إضافة سائق</button>
           </div>
           {drivers.map(d => (
             <div key={d.id} style={{ padding:'12px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10, animation:'slideIn .2s ease' }}>
               <div style={{ width:34,height:34,borderRadius:'50%',background:C.bg4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>👤</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:600 }}>{d.name}</div>
-                <div style={{ fontSize:11, color:C.text2 }}>{d.phone || '—'} · {d.license_number || 'No license'}</div>
+                <div style={{ fontSize:11, color:C.text2 }}>{d.phone || '—'} · {d.license_number || 'بدون رخصة'}</div>
               </div>
               <button onClick={() => delDriver(d.id)} style={delBtnStyle}>×</button>
             </div>
           ))}
-          {drivers.length === 0 && <EmptyRow label="No drivers added yet" />}
+          {drivers.length === 0 && <EmptyRow label="لا يوجد سائقون مضافون بعد" />}
         </div>
       </div>
 
       {/* Cars */}
       <div>
-        <SectionHeader icon="🚌" label="Vehicles" count={cars.length} />
+        <SectionHeader icon="🚌" label="المركبات" count={cars.length} />
         <div style={{ background:C.bg2, border:`1px solid ${C.border}`, borderRadius:14, overflow:'hidden' }}>
           <div style={{ padding:'16px', borderBottom:`1px solid ${C.border}` }}>
-            <div style={{ fontFamily:font, fontSize:10, color:C.text3, letterSpacing:'.1em', marginBottom:10 }}>ADD VEHICLE</div>
+            <div style={{ fontFamily:font, fontSize:10, color:C.text3, letterSpacing:'.1em', marginBottom:10 }}>إضافة مركبة</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              <MiniInput placeholder="Plate number *" value={cForm.plate} onChange={v => setCForm({...cForm,plate:v})} />
-              <MiniInput placeholder="Model (e.g. Mercedes Sprinter)" value={cForm.model} onChange={v => setCForm({...cForm,model:v})} />
-              <MiniInput placeholder="Capacity (seats)" type="number" value={cForm.capacity} onChange={v => setCForm({...cForm,capacity:v})} />
+              <MiniInput placeholder="رقم اللوحة *" value={cForm.plate} onChange={v => setCForm({...cForm,plate:v})} />
+              <MiniInput placeholder="الموديل (مثال: Mercedes Sprinter)" value={cForm.model} onChange={v => setCForm({...cForm,model:v})} />
+              <MiniInput placeholder="السعة (عدد المقاعد)" type="number" value={cForm.capacity} onChange={v => setCForm({...cForm,capacity:v})} />
             </div>
             {cErr && <div style={{ fontSize:11, color:C.red, marginTop:6 }}>⚠ {cErr}</div>}
-            <button onClick={addCar} disabled={busy} style={addBtnStyle}>+ Add Vehicle</button>
+            <button onClick={addCar} disabled={busy} style={addBtnStyle}>+ إضافة مركبة</button>
           </div>
           {cars.map(c => (
             <div key={c.id} style={{ padding:'12px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10, animation:'slideIn .2s ease' }}>
               <div style={{ width:34,height:34,borderRadius:'50%',background:C.bg4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🚌</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:600, fontFamily:font }}>{c.plate}</div>
-                <div style={{ fontSize:11, color:C.text2 }}>{c.model || '—'} · {c.capacity ? `${c.capacity} seats` : '—'}</div>
+                <div style={{ fontSize:11, color:C.text2 }}>{c.model || '—'} · {c.capacity ? `${c.capacity} مقعد` : '—'}</div>
               </div>
               <button onClick={() => delCar(c.id)} style={delBtnStyle}>×</button>
             </div>
           ))}
-          {cars.length === 0 && <EmptyRow label="No vehicles added yet" />}
+          {cars.length === 0 && <EmptyRow label="لا توجد مركبات مضافة بعد" />}
         </div>
       </div>
     </div>
@@ -692,7 +694,7 @@ function WonTab({ token, company }) {
     const key = `${waId}_${date}`;
     const form = dayForms[key] || {};
     if (!form.driver_id || !form.car_id) {
-      setSaveMsg(prev => ({ ...prev, [key]: '⚠ Select both driver and vehicle' }));
+      setSaveMsg(prev => ({ ...prev, [key]: '⚠ اختر السائق والمركبة معاً' }));
       return;
     }
     setSaving(prev => ({ ...prev, [key]: true }));
@@ -716,7 +718,7 @@ function WonTab({ token, company }) {
           }
         };
       });
-      setSaveMsg(prev => ({ ...prev, [key]: `✓ ${res.driver_name} / ${res.car_plate} saved` }));
+      setSaveMsg(prev => ({ ...prev, [key]: `✓ تم حفظ ${res.driver_name} / ${res.car_plate}` }));
       setTimeout(() => setSaveMsg(prev => ({ ...prev, [key]: '' })), 3000);
     } catch(e) {
       setSaveMsg(prev => ({ ...prev, [key]: `⚠ ${e.message}` }));
@@ -738,12 +740,12 @@ function WonTab({ token, company }) {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  if (loading) return <LoadingState label="Loading won tenders…" />;
+  if (loading) return <LoadingState label="جاري تحميل المناقصات الفائزة…" />;
 
   return (
     <div>
-      <SectionHeader icon="🏆" label="Won Tenders" count={won.length} />
-      {won.length === 0 && <EmptyState icon="🏁" label="No won tenders yet" sub="Win a bid to see your assigned trips here." />}
+      <SectionHeader icon="🏆" label="المناقصات الفائزة" count={won.length} />
+      {won.length === 0 && <EmptyState icon="🏁" label="لا توجد مناقصات فائزة بعد" sub="اربح عرضاً لتظهر رحلاتك المخصصة هنا." />}
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
         {won.map(t => {
           const waId = t.week_assignment_id;
@@ -761,21 +763,21 @@ function WonTab({ token, company }) {
               <div style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:16 }}>
                 <div style={{ flex:1 }}>
                   <div style={{ fontFamily:font, fontSize:10, color:C.gold, letterSpacing:'.08em', marginBottom:4 }}>
-                    TENDER #{t.id} · WON
-                    {isActive && <span style={{ marginLeft:8, color:C.green }}>● WEEK ACTIVE</span>}
-                    {weekOver && <span style={{ marginLeft:8, color:C.text3 }}>✓ WEEK ENDED</span>}
+                    مناقصة #{t.id} · فائزة
+                    {isActive && <span style={{ marginLeft:8, color:C.green }}>● الأسبوع نشط</span>}
+                    {weekOver && <span style={{ marginLeft:8, color:C.text3 }}>✓ انتهى الأسبوع</span>}
                   </div>
                   <div style={{ fontSize:15, fontWeight:700 }}>{t.from_loc} → {t.to_loc}</div>
-                  <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>{fmtDate(t.date)} · {fmtTime(t.pickup_time)} · {t.total_seats} seats</div>
+                  <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>{fmtDate(t.date)} · {fmtTime(t.pickup_time)} · {t.total_seats} مقعد</div>
                   {waId && (
                     <div style={{ fontSize:11, color:C.text3, fontFamily:font, marginTop:4 }}>
-                      Week: {t.week_start} → {t.week_end}
+                      الأسبوع: {t.week_start} ← {t.week_end}
                     </div>
                   )}
                 </div>
                 <div style={{ textAlign:'right' }}>
                   <div style={{ fontFamily:font, fontSize:18, fontWeight:700, color:C.gold }}>{fmtEGP(t.awarded_amount)}</div>
-                  <div style={{ fontSize:10, color:C.text3, fontFamily:font }}>winning bid</div>
+                  <div style={{ fontSize:10, color:C.text3, fontFamily:font }}>العرض الفائز</div>
                 </div>
               </div>
 
@@ -784,24 +786,24 @@ function WonTab({ token, company }) {
                 <>
                   <div style={{ borderTop:`1px solid ${C.border}`, padding:'10px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <span style={{ fontSize:12, color:C.text2 }}>
-                      {isActive ? '📅 Manage daily driver & vehicle assignments' : 'View weekly schedule'}
+                      {isActive ? '📅 إدارة تعيينات السائق والمركبة اليومية' : 'عرض جدول الأسبوع'}
                     </span>
                     <button onClick={() => expandWeek(waId)} style={{
                       background: C.goldDim, color: C.gold, border:`1px solid ${C.goldBorder}`,
                       borderRadius:8, padding:'7px 16px', cursor:'pointer', fontFamily:font, fontSize:12, fontWeight:600,
                     }}>
-                      {expanded === waId ? '▲ Collapse' : '▼ Expand Week'}
+                      {expanded === waId ? '▲ إخفاء' : '▼ عرض الأسبوع'}
                     </button>
                   </div>
 
                   {expanded === waId && (
                     <div style={{ borderTop:`1px solid ${C.border}`, padding:'20px', background:C.bg3 }}>
                       <div style={{ fontFamily:font, fontSize:10, color:C.text3, letterSpacing:'.1em', marginBottom:16 }}>
-                        DAILY DRIVER & VEHICLE SCHEDULE — {t.week_start} TO {t.week_end}
+                        جدول السائق والمركبة اليومي — من {t.week_start} إلى {t.week_end}
                       </div>
 
                       {!data ? (
-                        <div style={{ textAlign:'center', color:C.text3, fontFamily:font, fontSize:12 }}>Loading…</div>
+                        <div style={{ textAlign:'center', color:C.text3, fontFamily:font, fontSize:12 }}>جاري التحميل…</div>
                       ) : (
                         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                           {weekDates({ week_start: t.week_start, week_end: t.week_end }).map(date => {
@@ -821,7 +823,7 @@ function WonTab({ token, company }) {
                                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: existingDay ? 8 : 0 }}>
                                   <div style={{ minWidth:90, fontFamily:font, fontSize:11, fontWeight:700,
                                     color: isToday ? C.gold : isPast ? C.text3 : C.text }}>
-                                    {isToday ? '▶ TODAY' : new Date(date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'})}
+                                    {isToday ? '▶ اليوم' : new Date(date+'T00:00:00').toLocaleDateString('ar-EG',{weekday:'short',day:'2-digit',month:'short'})}
                                   </div>
                                   {existingDay?.driver_name ? (
                                     <div style={{ flex:1, fontSize:12 }}>
@@ -833,7 +835,7 @@ function WonTab({ token, company }) {
                                     </div>
                                   ) : (
                                     <div style={{ flex:1, fontSize:12, color: isToday ? C.red : C.text3 }}>
-                                      {isToday ? '⚠ Not assigned yet' : isFuture ? '— Not set yet' : '— Unassigned'}
+                                      {isToday ? '⚠ لم يتم التعيين بعد' : isFuture ? '— غير محدد بعد' : '— بدون تعيين'}
                                     </div>
                                   )}
                                 </div>
@@ -846,7 +848,7 @@ function WonTab({ token, company }) {
                                       onChange={e => setDayForms(prev => ({ ...prev, [key]: { ...(prev[key]||{}), driver_id: e.target.value }}))}
                                       style={selectStyle}
                                     >
-                                      <option value="">Select driver…</option>
+                                      <option value="">اختر السائق…</option>
                                       {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                     </select>
                                     <select
@@ -854,7 +856,7 @@ function WonTab({ token, company }) {
                                       onChange={e => setDayForms(prev => ({ ...prev, [key]: { ...(prev[key]||{}), car_id: e.target.value }}))}
                                       style={selectStyle}
                                     >
-                                      <option value="">Select vehicle…</option>
+                                      <option value="">اختر المركبة…</option>
                                       {cars.map(c => <option key={c.id} value={c.id}>{c.plate}{c.model ? ` · ${c.model}` : ''}</option>)}
                                     </select>
                                     <button
@@ -867,7 +869,7 @@ function WonTab({ token, company }) {
                                         fontFamily:font, fontSize:11, fontWeight:700, whiteSpace:'nowrap',
                                       }}
                                     >
-                                      {saving[key] ? 'Saving…' : existingDay?.driver_name ? '↻ Update' : '✓ Set'}
+                                      {saving[key] ? 'جاري الحفظ…' : existingDay?.driver_name ? '↻ تحديث' : '✓ تعيين'}
                                     </button>
                                   </div>
                                 )}
@@ -890,7 +892,7 @@ function WonTab({ token, company }) {
               {weekOver && (
                 <div style={{ borderTop:`1px solid ${C.border}`, padding:'10px 20px', background:C.bg3 }}>
                   <span style={{ fontSize:12, color:C.text3, fontFamily:font }}>
-                    ✓ Week ended {t.week_end}. Admin may re-open this trip for bidding.
+                    ✓ انتهى الأسبوع {t.week_end}. قد يعيد المشرف فتح هذه الرحلة للمزايدة.
                   </span>
                 </div>
               )}
@@ -908,18 +910,18 @@ function WonTab({ token, company }) {
 function ProfileTab({ company }) {
   return (
     <div style={{ maxWidth:480 }}>
-      <SectionHeader icon="⚙" label="Company Profile" />
+      <SectionHeader icon="⚙" label="ملف الشركة" />
       <div style={{ background:C.bg2, border:`1px solid ${C.border}`, borderRadius:14, padding:'24px' }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <div style={{ width:72,height:72,borderRadius:'50%',background:C.bg3,border:`2px solid ${C.goldBorder}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,margin:'0 auto 12px' }}>🚌</div>
           <div style={{ fontSize:20, fontWeight:700 }}>{company.company_name}</div>
           <div style={{ fontSize:13, color:C.text2, marginTop:4, fontFamily:font }}>{company.fleet_number}</div>
         </div>
-        <InfoRow label="Company ID" value={`#${company.id}`} />
-        <InfoRow label="Fleet / Bus Number" value={company.fleet_number} />
-        {company.phone && <InfoRow label="Contact Phone" value={company.phone} />}
+        <InfoRow label="رقم الشركة" value={`#${company.id}`} />
+        <InfoRow label="رقم الأسطول / الأتوبيس" value={company.fleet_number} />
+        {company.phone && <InfoRow label="رقم التواصل" value={company.phone} />}
         <div style={{ marginTop:16, fontSize:12, color:C.text3, fontFamily:font, textAlign:'center' }}>
-          Contact admin to update company details
+          تواصل مع المشرف لتحديث بيانات الشركة
         </div>
       </div>
     </div>
@@ -967,10 +969,10 @@ function TenderRouteMap({ stops, fromLoc, toLoc }) {
         iconSize: [20, 20], iconAnchor: [10, 10], className: '',
       });
 
-      const label = s.label || (isPickup ? 'Pickup' : 'Drop-off');
+      const label = s.label || (isPickup ? 'انطلاق' : 'وصول');
       L.marker([lat, lng], { icon })
         .addTo(map)
-        .bindPopup(`<b>${emoji} Stop ${i+1}: ${label}</b><br/><span style="font-size:11px;color:#666">${isPickup ? '🟢 Pickup point' : '🔵 Drop-off point'}</span>`);
+        .bindPopup(`<b>${emoji} نقطة ${i+1}: ${label}</b><br/><span style="font-size:11px;color:#666">${isPickup ? '🟢 نقطة انطلاق' : '🔵 نقطة وصول'}</span>`);
     });
 
     // Draw route line
@@ -1004,12 +1006,12 @@ function StopReport({ stops }) {
 
   return (
     <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
-      <div style={{ fontFamily: font, fontSize: 10, color: C.text3, letterSpacing: '.1em', marginBottom: 12 }}>STOP REPORT</div>
+      <div style={{ fontFamily: font, fontSize: 10, color: C.text3, letterSpacing: '.1em', marginBottom: 12 }}>تقرير النقاط</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {/* Pickup column */}
         <div>
           <div style={{ fontFamily: font, fontSize: 10, color: C.green, letterSpacing: '.08em', marginBottom: 8 }}>
-            🟢 PICKUP POINTS ({pickups.length})
+            🟢 نقاط الانطلاق ({pickups.length})
           </div>
           {pickups.map((s, i) => (
             <div key={s.id || i} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'flex-start' }}>
@@ -1023,20 +1025,20 @@ function StopReport({ stops }) {
               </div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
-                  {s.label || `Pickup ${i + 1}`}
+                  {s.label || `انطلاق ${i + 1}`}
                 </div>
                 <div style={{ fontSize: 10, color: C.text3, fontFamily: font, marginTop: 1 }}>
-                  {s.lat && s.lng ? `${parseFloat(s.lat).toFixed(5)}, ${parseFloat(s.lng).toFixed(5)}` : 'No coordinates'}
+                  {s.lat && s.lng ? `${parseFloat(s.lat).toFixed(5)}, ${parseFloat(s.lng).toFixed(5)}` : 'بدون إحداثيات'}
                 </div>
               </div>
             </div>
           ))}
-          {pickups.length === 0 && <div style={{ fontSize: 11, color: C.text3, fontFamily: font }}>No pickup points</div>}
+          {pickups.length === 0 && <div style={{ fontSize: 11, color: C.text3, fontFamily: font }}>لا توجد نقاط انطلاق</div>}
         </div>
         {/* Dropoff column */}
         <div>
           <div style={{ fontFamily: font, fontSize: 10, color: C.blue, letterSpacing: '.08em', marginBottom: 8 }}>
-            🔵 DROP-OFF POINTS ({dropoffs.length})
+            🔵 نقاط الوصول ({dropoffs.length})
           </div>
           {dropoffs.map((s, i) => (
             <div key={s.id || i} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'flex-start' }}>
@@ -1050,26 +1052,26 @@ function StopReport({ stops }) {
               </div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
-                  {s.label || `Drop-off ${i + 1}`}
+                  {s.label || `وصول ${i + 1}`}
                 </div>
                 <div style={{ fontSize: 10, color: C.text3, fontFamily: font, marginTop: 1 }}>
-                  {s.lat && s.lng ? `${parseFloat(s.lat).toFixed(5)}, ${parseFloat(s.lng).toFixed(5)}` : 'No coordinates'}
+                  {s.lat && s.lng ? `${parseFloat(s.lat).toFixed(5)}, ${parseFloat(s.lng).toFixed(5)}` : 'بدون إحداثيات'}
                 </div>
               </div>
             </div>
           ))}
-          {dropoffs.length === 0 && <div style={{ fontSize: 11, color: C.text3, fontFamily: font }}>No drop-off points</div>}
+          {dropoffs.length === 0 && <div style={{ fontSize: 11, color: C.text3, fontFamily: font }}>لا توجد نقاط وصول</div>}
         </div>
       </div>
       {/* Full ordered list */}
       <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
-        <div style={{ fontFamily: font, fontSize: 10, color: C.text3, letterSpacing: '.08em', marginBottom: 8 }}>FULL ROUTE ORDER</div>
+        <div style={{ fontFamily: font, fontSize: 10, color: C.text3, letterSpacing: '.08em', marginBottom: 8 }}>الترتيب الكامل للمسار</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {stops.map((s, i) => (
             <div key={s.id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
               <span style={{ fontFamily: font, fontSize: 10, color: C.text3, minWidth: 20 }}>#{i+1}</span>
               <span style={{ color: s.type === 'pickup' ? C.green : C.blue, fontSize: 11 }}>
-                {s.type === 'pickup' ? '🟢' : '🔵'} {s.type === 'pickup' ? 'Pickup' : 'Drop-off'}
+                {s.type === 'pickup' ? '🟢' : '🔵'} {s.type === 'pickup' ? 'انطلاق' : 'وصول'}
               </span>
               <span style={{ color: C.text, flex: 1 }}>{s.label || '—'}</span>
             </div>
@@ -1116,7 +1118,7 @@ function InfoRow({ label, value }) {
 function FieldInput({ label, value, onChange, type='text', placeholder, onEnter, autoComplete='off', name }) {
   return (
     <div>
-      <label style={{ fontSize:10, color:C.text3, fontFamily:font, letterSpacing:'.1em', display:'block', marginBottom:5 }}>{label.toUpperCase()}</label>
+      <label style={{ fontSize:10, color:C.text3, fontFamily:font, letterSpacing:'.1em', display:'block', marginBottom:5 }}>{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
         onKeyDown={e => e.key==='Enter' && onEnter && onEnter()}
         placeholder={placeholder}
