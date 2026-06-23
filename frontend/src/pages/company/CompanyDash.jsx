@@ -180,14 +180,14 @@ function AuthScreen({ onLogin }) {
           </div>
 
           <div style={{ padding:'28px 24px', display:'flex', flexDirection:'column', gap:14 }}>
-            <FieldInput label="Company Name" value={form.company_name} onChange={v => setForm({...form, company_name:v})} placeholder="e.g. Cairo Express Co." />
+            <FieldInput label="Company Name" value={form.company_name} onChange={v => setForm({...form, company_name:v})} placeholder="e.g. Cairo Express Co." autoComplete="off" name="waslney_company" />
             {mode === 'register' && (
               <>
-                <FieldInput label="Fleet / Bus Number" value={form.fleet_number} onChange={v => setForm({...form, fleet_number:v})} placeholder="e.g. BUS-2024-CAIRO" />
-                <FieldInput label="Contact Phone" value={form.phone} onChange={v => setForm({...form, phone:v})} placeholder="e.g. +20 100 000 0000" />
+                <FieldInput label="Fleet / Bus Number" value={form.fleet_number} onChange={v => setForm({...form, fleet_number:v})} placeholder="e.g. BUS-2024-CAIRO" autoComplete="off" name="waslney_fleet" />
+                <FieldInput label="Contact Phone" value={form.phone} onChange={v => setForm({...form, phone:v})} placeholder="e.g. +20 100 000 0000" autoComplete="off" name="waslney_phone" />
               </>
             )}
-            <FieldInput label="Password" type="password" value={form.password} onChange={v => setForm({...form, password:v})} placeholder="••••••••" onEnter={submit} />
+            <FieldInput label="Password" type="password" value={form.password} onChange={v => setForm({...form, password:v})} placeholder="••••••••" onEnter={submit} autoComplete="new-password" name="waslney_pw" />
 
             {err && <div style={{ fontSize:12, color:C.red, background:C.redDim, border:`1px solid ${C.redBorder}`, borderRadius:6, padding:'8px 12px' }}>⚠ {err}</div>}
 
@@ -1113,13 +1113,15 @@ function InfoRow({ label, value }) {
   );
 }
 
-function FieldInput({ label, value, onChange, type='text', placeholder, onEnter }) {
+function FieldInput({ label, value, onChange, type='text', placeholder, onEnter, autoComplete='off', name }) {
   return (
     <div>
       <label style={{ fontSize:10, color:C.text3, fontFamily:font, letterSpacing:'.1em', display:'block', marginBottom:5 }}>{label.toUpperCase()}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
         onKeyDown={e => e.key==='Enter' && onEnter && onEnter()}
         placeholder={placeholder}
+        name={name}
+        autoComplete={autoComplete}
         style={{ width:'100%', background:C.bg4, border:`1px solid ${C.border}`, borderRadius:8, padding:'12px 14px', color:C.text, fontFamily:font, fontSize:13, outline:'none', boxSizing:'border-box' }}
       />
     </div>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>Shuttle</title>
 
   <style>
@@ -10,6 +10,24 @@
     html, body, #root { height: 100%; }
     body { background: #09090b; color: #fafafa; font-family: 'Sora', sans-serif; }
     .leaflet-container { background: #1a1a2e !important; }
+
+    /* Native app: behave like a real app, not a web page —
+       no text selection, no long-press callout menu, no tap highlight. */
+    .native-app, .native-app * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* But keep real input fields selectable/editable so typing still works. */
+    .native-app input,
+    .native-app textarea,
+    .native-app [contenteditable="true"] {
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      user-select: text;
+    }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
