@@ -216,6 +216,52 @@ router.post('/admin-create-user', requireAuth, async (req, res) => {
     if (!car || !plate) return res.status(400).json({ error: 'Car model and plate required for drivers' });
   }
 
+  // Companies are stored in their own `companies` table. The users.role enum only
+  // allows passenger/driver/admin, so a company must NOT be inserted into `users`
+  // (doing so throws "Data truncated for column 'role'"). They log in via
+  // /api/tender/company/login using company_name + password.
+  if (role === 'company') {
+    const company_name = String(name).trim();
+    const fleet_number = String(req.body.fleet_number || '1').trim() || '1';
+    try {
+      const [[dupCompany]] = await db.query('SELECT id FROM companies WHERE company_name = ?', [company_name]);
+      if (dupCompany) return res.status(400).json({ error: 'Company name already exists' });
+
+      const companyHash = await bcrypt.hash(password, 10);
+      let companyId;
+      try {
+        const [r] = await db.query(
+          'INSERT INTO companies (company_name, fleet_number, password_hash, phone) VALUES (?, ?, ?, ?)',
+          [company_name, fleet_number, companyHash, phone || null]
+        );
+        companyId = r.insertId;
+      } catch (colErr) {
+        // Older schema without a phone column — insert without it, then add the column.
+        const [r] = await db.query(
+          'INSERT INTO companies (company_name, fleet_number, password_hash) VALUES (?, ?, ?)',
+          [company_name, fleet_number, companyHash]
+        );
+        companyId = r.insertId;
+        try { await db.query('ALTER TABLE companies ADD COLUMN phone VARCHAR(30) DEFAULT NULL'); } catch (_) {}
+      }
+
+      return res.json({
+        ok: true,
+        user: {
+          id: companyId,
+          name: company_name,
+          phone: phone || null,
+          email: email || null,
+          role: 'company',
+          account_status: 'active',
+        },
+      });
+    } catch (e) {
+      console.error('Admin create-company error:', e);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   // Check phone not already taken
   const [[existing]] = await db.query('SELECT id FROM users WHERE phone = ?', [phone]);
   if (existing) return res.status(400).json({ error: 'Phone already registered' });
