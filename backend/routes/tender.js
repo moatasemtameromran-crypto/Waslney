@@ -62,7 +62,13 @@ router.post('/company/register', async (req, res) => {
 router.post('/company/login', async (req, res) => {
   const { company_name, password } = req.body;
   try {
-    const [rows] = await db.query('SELECT * FROM companies WHERE company_name=?', [company_name]);
+    // Accept either the company name or the registered phone in the same field,
+    // so admins/companies can sign in with whichever they remember.
+    const ident = (company_name || '').trim();
+    const [rows] = await db.query(
+      'SELECT * FROM companies WHERE company_name=? OR phone=? LIMIT 1',
+      [ident, ident]
+    );
     if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
     const ok = await bcrypt.compare(password, rows[0].password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
