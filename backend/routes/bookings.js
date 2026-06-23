@@ -651,7 +651,51 @@ router.delete('/dispatch/batch/:id', requireAuth, requireRole('admin'), async (r
 // GET /api/bookings/companies — admin: list all registered companies for direct assignment
 router.get('/companies', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, company_name, fleet_number, phone FROM companies ORDER BY company_name ASC');
+    const [companies] = await db.query(
+      'SELECT id, company_name, fleet_number, phone FROM companies ORDER BY company_name ASC'
+    );
+    if (!companies.length) return res.json([]);
+
+    const companyIds = companies.map(c => c.id);
+    const placeholders = companyIds.map(() => '?').join(',');
+
+    const [drivers] = await db.query(
+      `SELECT id, company_id, name, phone, license_number
+       FROM company_drivers
+       WHERE company_id IN (${placeholders})
+       ORDER BY name ASC`,
+      companyIds
+    );
+    const [cars] = await db.query(
+      `SELECT id, company_id, plate, model, capacity
+       FROM company_cars
+       WHERE company_id IN (${placeholders})
+       ORDER BY plate ASC`,
+      companyIds
+    );
+
+    const driversByCompany = new Map();
+    const carsByCompany = new Map();
+    drivers.forEach(d => {
+      if (!driversByCompany.has(d.company_id)) driversByCompany.set(d.company_id, []);
+      driversByCompany.get(d.company_id).push(d);
+    });
+    cars.forEach(c => {
+      if (!carsByCompany.has(c.company_id)) carsByCompany.set(c.company_id, []);
+      carsByCompany.get(c.company_id).push(c);
+    });
+
+    const rows = companies.map(c => {
+      const companyDrivers = driversByCompany.get(c.id) || [];
+      const companyCars = carsByCompany.get(c.id) || [];
+      return {
+        ...c,
+        driver_count: companyDrivers.length,
+        car_count: companyCars.length,
+        drivers: companyDrivers,
+        cars: companyCars,
+      };
+    });
     res.json(rows);
   } catch (err) { res.status(500).json({ error: 'Server error' }); }
 });

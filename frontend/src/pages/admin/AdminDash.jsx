@@ -324,7 +324,7 @@ export default function AdminDash() {
   }
 
   return (
-    <div style={{ minHeight:'100vh', background:C.bg }}>
+    <div style={{ minHeight:'100vh', background:C.bg, paddingTop:'env(safe-area-inset-top)', paddingBottom:'env(safe-area-inset-bottom)' }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {/* Lightbox */}
@@ -1757,6 +1757,7 @@ function DispatchTab({ token, notify, trips, hdr, API }) {
 
   const statusColor = s => ({ pending:'#fbbf24', tendered:'#60a5fa', assigned:'#4ade80', completed:'#888' }[s] || '#888');
   const vehicleLabel = v => v === 'hiace' ? '🚐 Hiace' : v === 'coaster' ? '🚌 Coaster' : '🚗 Other';
+  const selectedCompany = companies.find(c => String(c.id) === String(coCompanyId));
 
   return (
     <div style={{ fontFamily:"'Sora',sans-serif", maxWidth:900, margin:'0 auto' }}>
@@ -2058,9 +2059,58 @@ function DispatchTab({ token, notify, trips, hdr, API }) {
                   : <select value={coCompanyId} onChange={e => setCoCompanyId(e.target.value)}
                       style={{ width:'100%', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:10, padding:'11px 14px', color:'#fff', fontSize:13, fontFamily:"'Sora',sans-serif", outline:'none' }}>
                       <option value="">— select company —</option>
-                      {companies.map(c => <option key={c.id} value={c.id}>{c.company_name} {c.fleet_number ? `(fleet: ${c.fleet_number})` : ''}</option>)}
+                      {companies.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.company_name} {c.fleet_number ? `(fleet: ${c.fleet_number})` : ''} · {c.driver_count || 0} drivers · {c.car_count || 0} cars
+                        </option>
+                      ))}
                     </select>
                 }
+
+                {selectedCompany && (
+                  <div style={{ marginTop:12, background:'#0d0d0d', border:'1px solid #2a2a2a', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:12, color:'#fff', fontWeight:700, marginBottom:6 }}>🏢 {selectedCompany.company_name}</div>
+                    <div style={{ fontSize:11, color:'#888', marginBottom:10 }}>
+                      {selectedCompany.phone ? `📞 ${selectedCompany.phone}` : '📞 no phone'} {selectedCompany.fleet_number ? `· Fleet ${selectedCompany.fleet_number}` : ''}
+                    </div>
+
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                      <div>
+                        <div style={{ fontSize:10, color:'#60a5fa', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:6 }}>
+                          Drivers ({(selectedCompany.drivers || []).length})
+                        </div>
+                        <div style={{ maxHeight:120, overflowY:'auto', border:'1px solid #1f2937', borderRadius:8, padding:'8px 10px', background:'#111827' }}>
+                          {(selectedCompany.drivers || []).length === 0 ? (
+                            <div style={{ fontSize:11, color:'#6b7280' }}>No drivers</div>
+                          ) : (
+                            (selectedCompany.drivers || []).map(d => (
+                              <div key={d.id} style={{ fontSize:11, color:'#d1d5db', marginBottom:5 }}>
+                                <strong>{d.name}</strong>{d.phone ? ` · ${d.phone}` : ''}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize:10, color:'#a78bfa', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:6 }}>
+                          Cars ({(selectedCompany.cars || []).length})
+                        </div>
+                        <div style={{ maxHeight:120, overflowY:'auto', border:'1px solid #312e81', borderRadius:8, padding:'8px 10px', background:'#1e1b4b' }}>
+                          {(selectedCompany.cars || []).length === 0 ? (
+                            <div style={{ fontSize:11, color:'#9ca3af' }}>No cars</div>
+                          ) : (
+                            (selectedCompany.cars || []).map(car => (
+                              <div key={car.id} style={{ fontSize:11, color:'#e5e7eb', marginBottom:5 }}>
+                                <strong>{car.plate}</strong>{car.model ? ` · ${car.model}` : ''}{car.capacity ? ` · ${car.capacity} seats` : ''}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
