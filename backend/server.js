@@ -33,6 +33,7 @@ app.use('/api/homescreen',   require('./routes/homescreen'));
 app.use('/api/addresses',    require('./routes/user_addresses'));
 app.use('/api/support',      require('./routes/support'));
 app.use('/api/referrals',    require('./routes/referrals'));
+app.use('/api/admin',        require('./routes/admin'));
 // ── SOCKET.IO REAL-TIME TRACKING ──────────────────────────
 require('./socket/tracking')(io);
 
