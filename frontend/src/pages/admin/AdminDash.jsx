@@ -138,6 +138,7 @@ export default function AdminDash() {
   const [trips,   setTrips]   = useState([]);
   const [drivers, setDrivers] = useState([]); // active only — for dropdowns
   const [allDrivers, setAllDrivers] = useState([]); // all statuses — for Drivers tab
+  const [companies, setCompanies] = useState([]);
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(false);
   const [editTrip, setEditTrip] = useState(null);
@@ -192,6 +193,7 @@ export default function AdminDash() {
   }, []);
   useEffect(() => { if (tab === 'review') loadPendingDrivers(); }, [tab]);
   useEffect(() => { if (tab === 'drivers') loadAllDrivers(); }, [tab]);
+  useEffect(() => { if (tab === 'companies') loadCompanies(); }, [tab]);
 
   async function loadAll() {
     setLoading(true);
@@ -216,6 +218,13 @@ export default function AdminDash() {
       setPendingDrivers(Array.isArray(data) ? data : (data.drivers || []));
     } catch(e) { notify('Error', 'Could not load pending drivers', 'error'); }
     finally { setReviewLoading(false); }
+  }
+
+  async function loadCompanies() {
+    try {
+      const rows = await api.getAdminCompanies();
+      setCompanies(Array.isArray(rows) ? rows : []);
+    } catch(e) { notify('Error', 'Could not load companies', 'error'); }
   }
 
   async function handleApprove(id) {
@@ -349,6 +358,7 @@ export default function AdminDash() {
           { id:'tenders',        label:'🏢 Tenders' },
           { id:'drivers',        label:'Drivers' },
           { id:'passengers',     label:'Passengers' },
+          { id:'companies',      label:'Companies' },
           { id:'review',         label:`📋 Review${pendingDrivers.length > 0 ? ` (${pendingDrivers.length})` : ''}` },
           { id:'create-account',   label:'👤 New Account' },
           { id:'manage-bookings',  label:'📅 Manage Bookings' },
@@ -696,6 +706,79 @@ export default function AdminDash() {
                     <div style={{ fontSize:12, color:C.text2 }}>{p.phone}</div>
                   </div>
                   <div style={{ textAlign:'right', fontSize:12, color:C.text3 }}>Joined {fmtDate(p.created_at)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── COMPANIES ── */}
+        {tab === 'companies' && (
+          <div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+              <p style={{ ...sectSt, margin:0 }}>{companies.length} registered companies</p>
+              <button onClick={loadCompanies} style={{ ...btnSm, fontSize:11 }}>↻ Refresh</button>
+            </div>
+
+            {companies.length === 0 && (
+              <div style={{ ...card, textAlign:'center', padding:'36px 20px' }}>
+                <div style={{ fontSize:36, marginBottom:8 }}>🏢</div>
+                <div style={{ fontWeight:500, marginBottom:4 }}>No companies found</div>
+                <p style={{ color:C.text3, fontSize:13 }}>Create company accounts to see them here.</p>
+              </div>
+            )}
+
+            {companies.map(cmp => (
+              <div key={cmp.id} style={{ ...card, marginBottom:12 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontSize:15, fontWeight:600 }}>🏢 {cmp.company_name}</div>
+                    <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>
+                      {cmp.phone || '—'} · Fleet {cmp.fleet_number || '—'} · Joined {fmtDate(cmp.created_at)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right', fontSize:12, color:C.text3 }}>
+                    <div>👤 {cmp.driver_count || 0} drivers</div>
+                    <div>🚌 {cmp.car_count || 0} cars</div>
+                  </div>
+                </div>
+
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div style={{ background:C.bg3, border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 12px' }}>
+                    <div style={{ fontSize:11, color:C.blue, textTransform:'uppercase', letterSpacing:'.08em', marginBottom:8 }}>
+                      Drivers ({(cmp.drivers || []).length})
+                    </div>
+                    {(cmp.drivers || []).length === 0 ? (
+                      <div style={{ fontSize:12, color:C.text3 }}>No drivers</div>
+                    ) : (
+                      (cmp.drivers || []).map(d => (
+                        <div key={d.id} style={{ fontSize:12, color:C.text, marginBottom:6 }}>
+                          <strong>{d.name}</strong>
+                          <div style={{ fontSize:11, color:C.text2 }}>
+                            {d.phone || '—'} · {d.license_number || 'No license'}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div style={{ background:C.bg3, border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 12px' }}>
+                    <div style={{ fontSize:11, color:C.purple, textTransform:'uppercase', letterSpacing:'.08em', marginBottom:8 }}>
+                      Cars ({(cmp.cars || []).length})
+                    </div>
+                    {(cmp.cars || []).length === 0 ? (
+                      <div style={{ fontSize:12, color:C.text3 }}>No cars</div>
+                    ) : (
+                      (cmp.cars || []).map(car => (
+                        <div key={car.id} style={{ fontSize:12, color:C.text, marginBottom:6 }}>
+                          <strong>{car.plate}</strong>
+                          <div style={{ fontSize:11, color:C.text2 }}>
+                            {car.model || '—'} · {car.capacity ? `${car.capacity} seats` : '—'}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

@@ -87,6 +87,7 @@ export const getAllLocations   = ()   => get('/location/all');
 export const getUsers            = ()         => get('/users');
 export const getDrivers          = ()         => get('/users/drivers');
 export const getAllDrivers        = ()         => get('/users/drivers/all');
+export const getAdminCompanies   = ()         => get('/admin/users/companies');
 export const getPendingDrivers   = ()         => get('/users/pending-review');
 export const approveDriver       = (id)       => post(`/users/${id}/approve`);
 export const rejectDriver        = (id, note) => post(`/users/${id}/reject`, { note });
