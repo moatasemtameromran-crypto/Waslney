@@ -4,7 +4,7 @@ import { isLoggedIn } from "@/lib/api";
 import Login from "@/pages/Login";
 import Layout from "@/components/Layout";
 import Dashboard from "@/pages/Dashboard";
-import { Customers, Drivers } from "@/pages/Users";
+import { Customers, Drivers, Companies } from "@/pages/Users";
 import Trips from "@/pages/Trips";
 import Analytics from "@/pages/Analytics";
 import Promotions from "@/pages/Promotions";
@@ -39,6 +39,7 @@ function Router() {
       {/* Users */}
       <Route path="/customers" component={Customers} />
       <Route path="/drivers" component={Drivers} />
+      <Route path="/companies" component={Companies} />
       <Route path="/trips" component={Trips} />
       {/* Waslney operations */}
       <Route path="/create-trip" component={CreateTrip} />
