@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
     children: [
       { label: "Customers", href: "/customers", icon: Users },
       { label: "Drivers", href: "/drivers", icon: Car },
+      { label: "Companies", href: "/companies", icon: Building2 },
       { label: "Delete Requests", href: "/delete-requests", icon: Trash2 },
       { label: "Driver Docs", href: "/driver-documents", icon: FileText },
     ],
