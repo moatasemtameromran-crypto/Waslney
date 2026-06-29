@@ -74,6 +74,66 @@ router.get('/auth/me', requireAdmin, async (req, res) => {
 // All routes below require admin
 router.use(requireAdmin);
 
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• ACCOUNTS (New Account form in admin panel) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// POST /api/admin/accounts â€” passenger/driver/admin go to users table; company goes to companies table
+router.post('/accounts', async (req, res) => {
+  const { name, phone, email, password, role, car, plate, fleet_number } = req.body;
+  if (!name || !phone || !password || !role) {
+    return res.status(400).json({ error: 'name, phone, password and role are required' });
+  }
+
+  if (role === 'company') {
+    const companyName = String(name).trim();
+    const fleet = String(fleet_number || '1').trim() || '1';
+    try {
+      const [[dup]] = await db.query('SELECT id FROM companies WHERE company_name = ?', [companyName]);
+      if (dup) return res.status(400).json({ error: 'Company name already exists' });
+      const hash = await bcrypt.hash(password, 10);
+      let companyId;
+      try {
+        const [r] = await db.query(
+          'INSERT INTO companies (company_name, fleet_number, password_hash, phone) VALUES (?, ?, ?, ?)',
+          [companyName, fleet, hash, phone || null]
+        );
+        companyId = r.insertId;
+      } catch (e1) {
+        const [r] = await db.query(
+          'INSERT INTO companies (company_name, fleet_number, password_hash) VALUES (?, ?, ?)',
+          [companyName, fleet, hash]
+        );
+        companyId = r.insertId;
+        try { await db.query('ALTER TABLE companies ADD COLUMN phone VARCHAR(30) DEFAULT NULL'); } catch (e2) {}
+      }
+      return res.json({ ok: true, user: { id: companyId, name: companyName, phone: phone || null, email: email || null, role: 'company', account_status: 'active' } });
+    } catch (e) {
+      console.error('admin/accounts company error:', e);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  if (role === 'driver' && (!car || !plate)) {
+    return res.status(400).json({ error: 'Car model and plate are required for drivers' });
+  }
+
+  try {
+    const [[existing]] = await db.query('SELECT id FROM users WHERE phone = ?', [phone]);
+    if (existing) return res.status(400).json({ error: 'Phone already registered' });
+    const hash = await bcrypt.hash(password, 10);
+    const [result] = await db.query(
+      "INSERT INTO users (name, phone, email, password, role, car, plate, account_status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')",
+      [name, phone, email || null, hash, role, car || null, plate || null]
+    );
+    const [[user]] = await db.query(
+      'SELECT id, name, phone, email, role, car, plate, account_status, created_at FROM users WHERE id = ?',
+      [result.insertId]
+    );
+    res.json({ ok: true, user });
+  } catch (e) {
+    console.error('admin/accounts error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ═══════════════════════════ DASHBOARD ═══════════════════════════
 router.get('/dashboard/stats', async (req, res) => {
   try {
@@ -411,3 +471,4 @@ router.post('/pushes', async (req, res) => {
 });
 
 module.exports = router;
+
