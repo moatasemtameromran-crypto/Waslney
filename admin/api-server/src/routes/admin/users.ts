@@ -97,6 +97,51 @@ router.put("/delete-requests/:id", requireAdminAuth, async (req, res) => {
   }
 });
 
+// GET /api/admin/users/companies â€” companies with their drivers & cars
+router.get("/companies", requireAdminAuth, async (req, res) => {
+  try {
+    const [companies] = await db.query(
+      "SELECT id, company_name, fleet_number, phone, created_at FROM companies ORDER BY created_at DESC"
+    ) as any;
+    if (!companies.length) { res.json([]); return; }
+
+    const ids = companies.map((c: any) => c.id);
+    const ph = ids.map(() => "?").join(",");
+
+    let drivers: any[] = [];
+    let cars: any[] = [];
+    try {
+      const [d] = await db.query(
+        `SELECT id, company_id, name, phone, license_number FROM company_drivers WHERE company_id IN (${ph}) ORDER BY name ASC`,
+        ids
+      ) as any;
+      drivers = d;
+    } catch { /* table may not exist yet */ }
+    try {
+      const [c] = await db.query(
+        `SELECT id, company_id, plate, model, capacity FROM company_cars WHERE company_id IN (${ph}) ORDER BY plate ASC`,
+        ids
+      ) as any;
+      cars = c;
+    } catch { /* table may not exist yet */ }
+
+    const dByC = new Map<number, any[]>();
+    const cByC = new Map<number, any[]>();
+    for (const d of drivers) { if (!dByC.has(d.company_id)) dByC.set(d.company_id, []); dByC.get(d.company_id)!.push(d); }
+    for (const c of cars) { if (!cByC.has(c.company_id)) cByC.set(c.company_id, []); cByC.get(c.company_id)!.push(c); }
+
+    res.json(companies.map((c: any) => ({
+      ...c,
+      drivers: dByC.get(c.id) || [],
+      cars: cByC.get(c.id) || [],
+      driver_count: (dByC.get(c.id) || []).length,
+      car_count: (cByC.get(c.id) || []).length,
+    })));
+  } catch (err: any) {
+    req.log.error({ err: err.message }, "Get companies error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // GET /api/admin/users/:id
 router.get("/:id", requireAdminAuth, async (req, res) => {
   try {
