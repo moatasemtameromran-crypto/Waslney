@@ -156,6 +156,9 @@ export const api = {
   /* ── New Account ── */
   createAccount: (data: any) => request<{ ok: boolean; user: any }>("/accounts", { method: "POST", body: JSON.stringify(data) }),
 
+  /* -- Companies (fleet) -- */
+  companies: () => request<Company[]>("/users/companies"),
+
   /* ── Driver Review ── */
   pendingReview: () => request<{ drivers: any[] }>("/review/pending"),
   approveDriver: (id: number) => request(`/review/${id}/approve`, { method: "POST" }),
@@ -204,3 +207,8 @@ export interface VehicleType { id: number; name: string; capacity: number; base_
 export interface CancellationPolicy { id: number; name: string; hours_before: number; refund_percent: number; }
 export interface CancellationReason { id: number; reason: string; role: string; }
 export interface DeleteRequest { id: number; user_id: number; reason: string; status: string; created_at: string; name: string; phone: string; email: string; }
+
+
+export interface CompanyDriver { id: number; company_id: number; name: string; phone?: string; license_number?: string; }
+export interface CompanyCar { id: number; company_id: number; plate: string; model?: string; capacity?: number; }
+export interface Company { id: number; company_name: string; fleet_number?: string; phone?: string; created_at: string; drivers: CompanyDriver[]; cars: CompanyCar[]; driver_count: number; car_count: number; }
